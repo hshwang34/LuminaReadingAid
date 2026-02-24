@@ -30,13 +30,41 @@ struct StreamView: View {
       // Video backdrop
       if let videoFrame = viewModel.currentVideoFrame, viewModel.hasReceivedFirstFrame {
         GeometryReader { geometry in
-          Image(uiImage: videoFrame)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
+          ZStack {
+            Image(uiImage: videoFrame)
+              .resizable()
+              .aspectRatio(contentMode: .fill)
+              .frame(width: geometry.size.width, height: geometry.size.height)
+              .clipped()
+
+            if viewModel.isHandTrackingEnabled {
+              HandOverlayView(
+                trackingResult: viewModel.handTrackingResult,
+                imageSize: videoFrame.size,
+                viewSize: geometry.size
+              )
+              .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+
+            // Word capture toast
+            if let word = viewModel.lastCapturedWord {
+              VStack {
+                Text(word)
+                  .font(.system(size: 36, weight: .bold, design: .rounded))
+                  .foregroundColor(.white)
+                  .padding(.horizontal, 28)
+                  .padding(.vertical, 16)
+                  .background(.black.opacity(0.75))
+                  .clipShape(RoundedRectangle(cornerRadius: 20))
+                Spacer()
+              }
+              .padding(.top, 72)
+              .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+          }
         }
         .edgesIgnoringSafeArea(.all)
+        .animation(.spring(duration: 0.3), value: viewModel.lastCapturedWord)
       } else {
         ProgressView()
           .scaleEffect(1.5)

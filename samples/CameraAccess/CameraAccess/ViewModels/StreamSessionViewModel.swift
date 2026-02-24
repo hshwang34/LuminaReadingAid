@@ -14,8 +14,10 @@
 // video frame handling, photo capture, and error handling.
 //
 
+import Combine
 import MWDATCamera
 import MWDATCore
+import SwiftData
 import SwiftUI
 
 enum StreamingStatus {
@@ -32,6 +34,9 @@ class StreamSessionViewModel: ObservableObject {
   @Published var showError: Bool = false
   @Published var errorMessage: String = ""
   @Published var hasActiveDevice: Bool = false
+  @Published var handTrackingResult: HandTrackingResult = .empty
+  @Published var isHandTrackingEnabled: Bool = true
+  @Published var lastCapturedWord: String?
 
   var isStreaming: Bool {
     streamingStatus != .stopped
@@ -50,6 +55,13 @@ class StreamSessionViewModel: ObservableObject {
   private let wearables: WearablesInterface
   private let deviceSelector: AutoDeviceSelector
   private var deviceMonitorTask: Task<Void, Never>?
+  // Hand tracking
+  private let handPoseService = HandPoseService()
+  private var handTrackingCancellable: AnyCancellable?
+  // Word capture
+  private let wordCaptureService = WordCaptureService()
+  private var hasConsumedCurrentTrigger = false
+  private var modelContext: ModelContext { AppContainer.shared.mainContext }
 
   init(wearables: WearablesInterface) {
     self.wearables = wearables
@@ -57,8 +69,8 @@ class StreamSessionViewModel: ObservableObject {
     self.deviceSelector = AutoDeviceSelector(wearables: wearables)
     let config = StreamSessionConfig(
       videoCodec: VideoCodec.raw,
-      resolution: StreamingResolution.low,
-      frameRate: 24)
+      resolution: StreamingResolution.high,
+      frameRate: 15)
     streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
 
     // Monitor device availability
@@ -79,6 +91,9 @@ class StreamSessionViewModel: ObservableObject {
     // Subscribe to video frames from the device camera
     // Each VideoFrame contains the raw camera data that we convert to UIImage
     videoFrameListenerToken = streamSession.videoFramePublisher.listen { [weak self] videoFrame in
+      // Process hand tracking on the SDK callback thread (before main actor hop)
+      self?.handPoseService.processFrame(videoFrame.sampleBuffer)
+
       Task { @MainActor [weak self] in
         guard let self else { return }
 
@@ -116,6 +131,29 @@ class StreamSessionViewModel: ObservableObject {
         }
       }
     }
+
+    // Subscribe to hand tracking results and forward to published property
+    handTrackingCancellable = handPoseService.resultPublisher
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] result in
+        guard let self else { return }
+        self.handTrackingResult = result
+
+        // Reset debounce whenever the trigger is no longer active
+        if case .triggered = result.stillnessState { } else {
+          self.hasConsumedCurrentTrigger = false
+        }
+
+        // Fire OCR once per stillness event
+        if case .triggered = result.stillnessState,
+           result.isValidPose,
+           !self.hasConsumedCurrentTrigger,
+           let frame = self.currentVideoFrame,
+           let tipNorm = result.landmarks?.point(for: .indexTip) {
+          self.hasConsumedCurrentTrigger = true
+          Task { await self.captureWord(frame: frame, tipNormalized: tipNorm) }
+        }
+      }
   }
 
   func handleStartStreaming() async {
@@ -147,6 +185,7 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   func stopSession() async {
+    handPoseService.reset()
     await streamSession.stop()
   }
 
@@ -164,11 +203,33 @@ class StreamSessionViewModel: ObservableObject {
     capturedPhoto = nil
   }
 
+  private func captureWord(frame: UIImage, tipNormalized: CGPoint) async {
+    NSLog("[OCR] captureWord fired — tip=(%.3f, %.3f)", tipNormalized.x, tipNormalized.y)
+    let service = wordCaptureService
+    let word = await Task.detached(priority: .userInitiated) {
+      await service.recognizeWord(in: frame, tipNormalized: tipNormalized)
+    }.value
+    NSLog("[OCR] result: %@", word ?? "nil")
+
+    guard let word, !word.isEmpty else { return }
+
+    let captured = CapturedWord(text: word)
+    modelContext.insert(captured)
+    try? modelContext.save()
+
+    withAnimation(.spring(duration: 0.3)) { lastCapturedWord = word }
+    try? await Task.sleep(for: .seconds(2))
+    withAnimation(.easeOut(duration: 0.3)) {
+      if lastCapturedWord == word { lastCapturedWord = nil }
+    }
+  }
+
   private func updateStatusFromState(_ state: StreamSessionState) {
     switch state {
     case .stopped:
       currentVideoFrame = nil
       streamingStatus = .stopped
+      handPoseService.reset()
     case .waitingForDevice, .starting, .stopping, .paused:
       streamingStatus = .waiting
     case .streaming:
