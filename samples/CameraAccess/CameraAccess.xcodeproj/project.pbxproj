@@ -12,6 +12,7 @@
 		0BA8D3862F4E389B005DCC08 /* HandOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA8D3852F4E389B005DCC08 /* HandOverlayView.swift */; };
 		0BA8D3892F4E42AB005DCC08 /* CapturedWord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA8D3872F4E42AB005DCC08 /* CapturedWord.swift */; };
 		0BA8D38A2F4E42AB005DCC08 /* WordCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA8D3882F4E42AB005DCC08 /* WordCaptureService.swift */; };
+		0BA8D38C2F4E4E26005DCC08 /* CapturedWordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA8D38B2F4E4E26005DCC08 /* CapturedWordsView.swift */; };
 		8F2D23802E856711002D0588 /* DebugMenuViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */; };
 		8F8F00782E8ACB4600A4BDAF /* WearablesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F8F00772E8ACB4500A4BDAF /* WearablesViewModel.swift */; };
 		8FD96B7F2E6F0A9800F56AB1 /* CameraAccessApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD96B792E6F0A9800F56AB1 /* CameraAccessApp.swift */; };
@@ -69,6 +70,7 @@
 		0BA8D3852F4E389B005DCC08 /* HandOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandOverlayView.swift; sourceTree = "<group>"; };
 		0BA8D3872F4E42AB005DCC08 /* CapturedWord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturedWord.swift; sourceTree = "<group>"; };
 		0BA8D3882F4E42AB005DCC08 /* WordCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordCaptureService.swift; sourceTree = "<group>"; };
+		0BA8D38B2F4E4E26005DCC08 /* CapturedWordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturedWordsView.swift; sourceTree = "<group>"; };
 		3A3A3A3A3A3A3A3A3A3A3A3A /* CameraAccess.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraAccess.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugMenuViewModel.swift; sourceTree = "<group>"; };
 		8F8F00772E8ACB4500A4BDAF /* WearablesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearablesViewModel.swift; sourceTree = "<group>"; };
@@ -156,6 +158,7 @@
 		8FD96B762E6F0A9800F56AB1 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				0BA8D38B2F4E4E26005DCC08 /* CapturedWordsView.swift */,
 				8FFD5FF42E8422580035E446 /* Components */,
 				E6DA451B2E79A63100E3F688 /* MockDeviceKit */,
 				8FFD605E2E84A2F70035E446 /* DebugMenuView.swift */,
@@ -330,6 +333,7 @@
 				8FD96B812E6F0A9800F56AB1 /* HomeScreenView.swift in Sources */,
 				8F2D23802E856711002D0588 /* DebugMenuViewModel.swift in Sources */,
 				0BA8D3842F4E386D005DCC08 /* HandPoseService.swift in Sources */,
+				0BA8D38C2F4E4E26005DCC08 /* CapturedWordsView.swift in Sources */,
 				8FFD60542E849D0D0035E446 /* RegistrationView.swift in Sources */,
 				8FFD60342E8434070035E446 /* MediaPickerView.swift in Sources */,
 				8FFD60352E8434070035E446 /* StatusText.swift in Sources */,

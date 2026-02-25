@@ -1,7 +1,7 @@
 //
 // HandTrackingTypes.swift
 //
-// Shared data types for hand tracking: configuration, landmarks, stillness state, and results.
+// Shared data types for hand tracking: configuration, landmarks, pinch state, and results.
 //
 
 import Vision
@@ -12,16 +12,14 @@ import CoreGraphics
 struct HandTrackingConfig {
   /// Process every Nth frame (3 = ~5fps hand tracking at 15fps stream)
   let frameSkip: Int = 3
-  /// Radius in pixels within which the fingertip must stay to count as stationary
-  let stationaryRadiusPixels: CGFloat = 15.0
-  /// Duration the fingertip must remain stationary before triggering
-  let stationaryDurationSeconds: TimeInterval = 1.0
   /// Minimum confidence threshold for landmark detection
   let minimumConfidence: Float = 0.3
-  /// Extension ratio above which the index finger is considered extended
-  let indexExtensionThreshold: CGFloat = 0.80
-  /// Extension ratio below which the middle finger is considered curled
-  let curledExtensionThreshold: CGFloat = 0.70
+  /// Normalized Vision distance (0–1) below which thumb tip to index PIP counts as a pinch
+  let pinchThreshold: CGFloat = 0.05
+  /// Normalized Vision distance above which the pinch is considered released (hysteresis)
+  let pinchReleaseThreshold: CGFloat = 0.08
+  /// Minimum seconds in cooldown after a pinch trigger, regardless of release
+  let pinchCooldownSeconds: TimeInterval = 1.0
 
   static let `default` = HandTrackingConfig()
 }
@@ -38,25 +36,24 @@ struct HandLandmarks {
   }
 }
 
-// MARK: - Stillness State
+// MARK: - Pinch State
 
-enum StillnessState: Equatable {
-  case inactive
-  case tracking(progress: Double)  // 0.0 – 1.0
-  case triggered
+enum PinchState: Equatable {
+  case open       // thumb tip and index PIP are far apart
+  case triggered  // pinch detected; cooldown active until released and time elapsed
 }
 
 // MARK: - Result
 
 struct HandTrackingResult {
   let landmarks: HandLandmarks?
-  let stillnessState: StillnessState
+  let pinchState: PinchState
   let isValidPose: Bool
   let timestamp: TimeInterval
 
   static let empty = HandTrackingResult(
     landmarks: nil,
-    stillnessState: .inactive,
+    pinchState: .open,
     isValidPose: false,
     timestamp: 0
   )

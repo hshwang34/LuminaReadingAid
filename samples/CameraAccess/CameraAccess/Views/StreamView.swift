@@ -15,6 +15,7 @@
 //
 
 import MWDATCore
+import SwiftData
 import SwiftUI
 
 struct StreamView: View {
@@ -46,6 +47,17 @@ struct StreamView: View {
               .frame(width: geometry.size.width, height: geometry.size.height)
             }
 
+            // OCR debug region
+            if let rect = viewModel.ocrDebugRect {
+              OCRDebugOverlay(
+                visionRect: rect,
+                imageSize: videoFrame.size,
+                viewSize: geometry.size
+              )
+              .frame(width: geometry.size.width, height: geometry.size.height)
+              .allowsHitTesting(false)
+            }
+
             // Word capture toast
             if let word = viewModel.lastCapturedWord {
               VStack {
@@ -71,6 +83,30 @@ struct StreamView: View {
           .foregroundColor(.white)
       }
 
+      // OCR crop preview — appears top-right whenever OCR fires
+      if let crop = viewModel.currentOCRCrop {
+        VStack {
+          HStack {
+            Spacer()
+            Image(uiImage: crop)
+              .resizable()
+              .aspectRatio(contentMode: .fit)
+              .frame(width: 160, height: 80)
+              .clipShape(RoundedRectangle(cornerRadius: 10))
+              .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                  .strokeBorder(Color.yellow, lineWidth: 1.5)
+              )
+              .shadow(radius: 6)
+              .padding(.top, 56)
+              .padding(.trailing, 16)
+          }
+          Spacer()
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topTrailing)))
+        .allowsHitTesting(false)
+      }
+
       // Bottom controls layer
 
       VStack {
@@ -79,6 +115,7 @@ struct StreamView: View {
       }
       .padding(.all, 24)
     }
+    .animation(.spring(duration: 0.25), value: viewModel.currentOCRCrop != nil)
     .onDisappear {
       Task {
         if viewModel.streamingStatus != .stopped {
@@ -100,9 +137,47 @@ struct StreamView: View {
   }
 }
 
+// MARK: - OCR Debug Overlay
+
+struct OCRDebugOverlay: View {
+  let visionRect: CGRect   // Vision normalized coords (0–1, bottom-left origin)
+  let imageSize: CGSize
+  let viewSize: CGSize
+
+  var body: some View {
+    Canvas { context, _ in
+      let scale = max(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
+      let scaledW = imageSize.width * scale
+      let scaledH = imageSize.height * scale
+      let offX = (scaledW - viewSize.width) / 2
+      let offY = (scaledH - viewSize.height) / 2
+
+      // Convert Vision rect corners to view coords
+      let left   = visionRect.minX * scaledW - offX
+      let right  = visionRect.maxX * scaledW - offX
+      let top    = (1.0 - visionRect.maxY) * scaledH - offY
+      let bottom = (1.0 - visionRect.minY) * scaledH - offY
+
+      let viewRect = CGRect(x: left, y: top, width: right - left, height: bottom - top)
+      var path = Path(viewRect)
+      context.stroke(path, with: .color(.yellow), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+
+      // Cross-hair at rect center
+      let cx = (left + right) / 2
+      let cy = (top + bottom) / 2
+      var cross = Path()
+      cross.move(to: CGPoint(x: cx - 8, y: cy)); cross.addLine(to: CGPoint(x: cx + 8, y: cy))
+      cross.move(to: CGPoint(x: cx, y: cy - 8)); cross.addLine(to: CGPoint(x: cx, y: cy + 8))
+      context.stroke(cross, with: .color(.yellow), lineWidth: 2)
+    }
+  }
+}
+
 // Extracted controls for clarity
 struct ControlsView: View {
   @ObservedObject var viewModel: StreamSessionViewModel
+  @State private var showCapturedWords = false
+
   var body: some View {
     // Controls row
     HStack(spacing: 8) {
@@ -120,6 +195,15 @@ struct ControlsView: View {
       CircleButton(icon: "camera.fill", text: nil) {
         viewModel.capturePhoto()
       }
+
+      // Review captured words
+      CircleButton(icon: "list.bullet", text: nil) {
+        showCapturedWords = true
+      }
+    }
+    .sheet(isPresented: $showCapturedWords) {
+      CapturedWordsView()
+        .modelContainer(AppContainer.shared)
     }
   }
 }

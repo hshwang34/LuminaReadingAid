@@ -37,12 +37,55 @@ MVVM with SwiftUI. All ViewModels are `@MainActor` and use `ObservableObject`.
 - `StreamSession` is the core streaming object — configured with codec, resolution, frame rate.
 - `#if DEBUG` blocks gate all `MWDATMockDevice` imports and debug UI (mock device panel, debug menu overlay).
 
+**Folder structure** (all source under `CameraAccess/`):
+
+```
+CameraAccess/
+├── CameraAccessApp.swift          # App entry point
+├── CapturedWord.swift             # SwiftData model + AppContainer.shared
+├── HandPoseService.swift          # Hand pose detection (MCP-anchored formula)
+├── HandTrackingTypes.swift        # HandTrackingConfig thresholds & types
+├── WordCaptureService.swift       # OCR via VNRecognizeTextRequest on fingertip crop
+├── ViewModels/
+│   ├── WearablesViewModel.swift
+│   ├── StreamSessionViewModel.swift
+│   ├── DebugMenuViewModel.swift
+│   └── MockDeviceKit/
+│       ├── MockDeviceKitViewModel.swift
+│       └── MockDeviceViewModel.swift
+└── Views/
+    ├── MainAppView.swift
+    ├── HomeScreenView.swift
+    ├── RegistrationView.swift
+    ├── StreamSessionView.swift
+    ├── StreamView.swift
+    ├── NonStreamView.swift
+    ├── PhotoPreviewView.swift
+    ├── DebugMenuView.swift
+    ├── Components/
+    │   ├── CardView.swift
+    │   ├── CircleButton.swift
+    │   ├── CustomButton.swift
+    │   ├── HandOverlayView.swift  # Visualizes hand joints & pointing gesture
+    │   ├── MediaPickerView.swift
+    │   └── StatusText.swift
+    └── MockDeviceKit/             # DEBUG only
+        ├── MockDeviceCardView.swift
+        ├── MockDeviceKitButton.swift
+        └── MockDeviceKitView.swift
+```
+
+**Root-level file note**: `HandPoseService.swift`, `HandTrackingTypes.swift`, `WordCaptureService.swift`, and `CapturedWord.swift` live at the root of `CameraAccess/` (not in a `Services/` or `Models/` subfolder). Always edit these root-level copies.
+
 **ViewModels**:
 - `WearablesViewModel` — registration state, device list, compatibility monitoring
 - `StreamSessionViewModel` — streaming lifecycle, video frames (`UIImage`), photo capture
 - `DebugMenuViewModel` / `MockDeviceKitViewModel` — DEBUG-only mock device simulation
 
-**Reusable components** in `Views/Components/`: `CardView`, `CircleButton`, `CustomButton`, `StatusText`, `MediaPickerView`
+**Services** (root-level, no subdirectory):
+- `HandPoseService` — detects index-extended / middle-curled gesture from Vision hand observations
+- `WordCaptureService` — runs `VNRecognizeTextRequest` on a crop region above the index fingertip; returns recognized word + cropped `UIImage`
+- `CapturedWord` — SwiftData `@Model` for persisted captured words; `AppContainer.shared` provides the `ModelContainer`
 
 ## SDK Configuration
 

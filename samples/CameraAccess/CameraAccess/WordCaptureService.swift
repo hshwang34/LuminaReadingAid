@@ -1,83 +1,158 @@
 //
 // WordCaptureService.swift
 //
-// Runs VNRecognizeTextRequest on the camera frame region above the index fingertip
-// and returns the recognized word closest to the tip's horizontal position.
+// Crops the region above the fingertip, preprocesses it for maximum OCR quality,
+// then extracts all recognized text within that region.
 //
 
+import CoreImage
+import CoreImage.CIFilterBuiltins
+import ImageIO
 import Vision
 import UIKit
 
+struct WordCaptureResult {
+  /// All text recognized in the crop region, observations joined by space. Empty if nothing found.
+  let text: String
+  /// Original crop before any processing.
+  let originalCrop: UIImage?
+  /// Preprocessed crop that was sent to OCR (upscaled + enhanced).
+  let preprocessedCrop: UIImage?
+}
+
 final class WordCaptureService {
 
-  // MARK: - Crop Parameters
-
-  /// How far above the tip (in Vision normalized Y) to start the OCR region
-  private let verticalOffset: CGFloat = 0.03
-  /// Width of the OCR crop region (fraction of frame width, centered on tip X)
-  private let cropWidth: CGFloat = 0.15
-  /// Height of the OCR crop region (fraction of frame height)
-  private let cropHeight: CGFloat = 0.06
+  private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
   // MARK: - Public API
 
-  /// Recognizes the word above `tipNormalized` in `image`.
-  ///
-  /// - Parameters:
-  ///   - image: The full video frame as UIImage.
-  ///   - tipNormalized: Index tip position in Vision normalized coords (0–1, bottom-left origin).
-  /// - Returns: The recognized word, or nil if OCR finds nothing.
-  func recognizeWord(in image: UIImage, tipNormalized: CGPoint) async -> String? {
+  /// Crops `cropRect` from `image`, preprocesses the crop, then runs OCR on it.
+  /// Returns all recognized text and the preprocessed thumbnail.
+  func recognizeWord(in image: UIImage, cropRect: CGRect) async -> WordCaptureResult {
     await withCheckedContinuation { continuation in
-      DispatchQueue.global(qos: .userInitiated).async { [self] in
-        guard let cgImage = image.cgImage else {
-          continuation.resume(returning: nil)
+      DispatchQueue.global(qos: .userInitiated).async { [ciContext] in
+
+        // Step 1: Crop the oriented region
+        guard let originalCrop = Self.cropImage(image: image, visionRect: cropRect) else {
+          NSLog("[OCR] crop failed")
+          continuation.resume(returning: WordCaptureResult(text: "", originalCrop: nil, preprocessedCrop: nil))
           return
         }
+        NSLog("[OCR] original crop size: %.0fx%.0f", originalCrop.size.width, originalCrop.size.height)
 
-        var recognized: String? = nil
+        // Step 2: Preprocess — upscale 4x, document enhance, sharpen
+        guard let preprocessedCG = Self.preprocess(originalCrop, context: ciContext) else {
+          NSLog("[OCR] preprocessing failed, using raw crop for OCR")
+          continuation.resume(returning: WordCaptureResult(text: "", originalCrop: originalCrop, preprocessedCrop: nil))
+          return
+        }
+        let preprocessedCrop = UIImage(cgImage: preprocessedCG)
+        NSLog("[OCR] preprocessed size: %.0fx%.0f", preprocessedCrop.size.width, preprocessedCrop.size.height)
+
+        // Step 3: Run OCR on the preprocessed crop
+        // No regionOfInterest — the entire image IS the crop region
+        var recognizedText = ""
 
         let request = VNRecognizeTextRequest { req, _ in
           guard let observations = req.results as? [VNRecognizedTextObservation],
                 !observations.isEmpty
           else {
-            NSLog("[OCR] no observations found in full frame")
+            NSLog("[OCR] no text found in preprocessed crop")
             return
           }
 
           NSLog("[OCR] found %d observations", observations.count)
           for obs in observations {
-            NSLog("[OCR]   bbox=(%.2f,%.2f,%.2f,%.2f) text=%@",
-                  obs.boundingBox.origin.x, obs.boundingBox.origin.y,
-                  obs.boundingBox.width, obs.boundingBox.height,
-                  obs.topCandidates(1).first?.string ?? "?")
+            NSLog("[OCR]   text=%@ conf=%.2f",
+                  obs.topCandidates(1).first?.string ?? "?",
+                  obs.topCandidates(1).first?.confidence ?? 0)
           }
 
-          // Pick the observation closest to tip position
-          let tipX = tipNormalized.x
-          let tipY = tipNormalized.y
-          let best = observations.min(by: {
-            let d0 = hypot($0.boundingBox.midX - tipX, $0.boundingBox.midY - tipY)
-            let d1 = hypot($1.boundingBox.midX - tipX, $1.boundingBox.midY - tipY)
-            return d0 < d1
-          })
+          // Sort observations top-to-bottom, left-to-right
+          // Vision y=0 is bottom, so higher midY = higher on screen
+          let sorted = observations.sorted {
+            if abs($0.boundingBox.midY - $1.boundingBox.midY) > 0.02 {
+              return $0.boundingBox.midY > $1.boundingBox.midY
+            }
+            return $0.boundingBox.midX < $1.boundingBox.midX
+          }
 
-          let raw = best?.topCandidates(1).first?.string ?? ""
-          recognized = raw
-            .components(separatedBy: .whitespaces)
-            .filter { !$0.isEmpty }
-            .first
+          recognizedText = sorted
+            .compactMap { $0.topCandidates(1).first?.string }
+            .joined(separator: " ")
         }
-        request.recognitionLevel = .accurate
-        request.recognitionLanguages = ["en-US"]
-        // No regionOfInterest — scan full frame to diagnose
 
-        // perform() is synchronous; completion handler fires before it returns
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.recognitionLanguages = ["en-US"]
+
+        let handler = VNImageRequestHandler(cgImage: preprocessedCG, options: [:])
         try? handler.perform([request])
 
-        continuation.resume(returning: recognized)
+        NSLog("[OCR] final text: \"%@\"", recognizedText)
+        continuation.resume(returning: WordCaptureResult(
+          text: recognizedText,
+          originalCrop: originalCrop,
+          preprocessedCrop: preprocessedCrop
+        ))
       }
     }
+  }
+
+  // MARK: - Preprocessing
+
+  /// Upscale 4x → document enhance → sharpen.
+  /// Returns nil if any step fails.
+  private static func preprocess(_ image: UIImage, context: CIContext) -> CGImage? {
+    guard let cgImage = image.cgImage else { return nil }
+    var ci = CIImage(cgImage: cgImage)
+
+    // 1. Upscale 4x — biggest single improvement for small text
+    ci = ci.applyingFilter("CILanczosScaleTransform", parameters: [
+      kCIInputScaleKey: 4.0,
+      kCIInputAspectRatioKey: 1.0
+    ])
+
+    // 2. Document enhance — designed for text: boosts contrast, removes shadows
+    ci = ci.applyingFilter("CIDocumentEnhancer", parameters: [
+      "inputAmount": 1.0
+    ])
+
+    // 3. Sharpen luminance — crisps up character edges after upscaling
+    ci = ci.applyingFilter("CISharpenLuminance", parameters: [
+      kCIInputSharpnessKey: 0.6,
+      kCIInputRadiusKey: 1.5
+    ])
+
+    return context.createCGImage(ci, from: ci.extent)
+  }
+
+  // MARK: - Image Cropping
+
+  /// Crops a UIImage using a Vision normalized rect (bottom-left origin).
+  /// Renders into an orientation-normalized buffer first so EXIF rotation
+  /// is baked in before cropping.
+  private static func cropImage(image: UIImage, visionRect: CGRect) -> UIImage? {
+    let displaySize = image.size
+    let renderer = UIGraphicsImageRenderer(size: displaySize)
+    let oriented = renderer.image { _ in image.draw(at: .zero) }
+
+    guard let cgImage = oriented.cgImage else { return nil }
+    let width = CGFloat(cgImage.width)
+    let height = CGFloat(cgImage.height)
+
+    // Vision (0,0) = bottom-left; CGImage (0,0) = top-left — flip Y
+    let cgCropRect = CGRect(
+      x: visionRect.minX * width,
+      y: (1.0 - visionRect.maxY) * height,
+      width: visionRect.width * width,
+      height: visionRect.height * height
+    )
+    NSLog("[OCR] crop rect — vision=(%.3f,%.3f,%.3f,%.3f) pixels=(%.0f,%.0f,%.0f,%.0f)",
+          visionRect.origin.x, visionRect.origin.y, visionRect.width, visionRect.height,
+          cgCropRect.origin.x, cgCropRect.origin.y, cgCropRect.width, cgCropRect.height)
+
+    guard let cropped = cgImage.cropping(to: cgCropRect) else { return nil }
+    return UIImage(cgImage: cropped, scale: image.scale, orientation: .up)
   }
 }

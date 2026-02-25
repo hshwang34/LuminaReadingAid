@@ -2,7 +2,7 @@
 // HandOverlayView.swift
 //
 // Canvas-based SwiftUI overlay that draws the hand skeleton, joint landmarks,
-// and a stillness progress ring on top of the live video feed.
+// and pinch gesture feedback on top of the live video feed.
 //
 
 import SwiftUI
@@ -17,10 +17,11 @@ struct HandOverlayView: View {
 
   var body: some View {
     Canvas { context, size in
-      guard let landmarks = trackingResult.landmarks else { return }
+      guard trackingResult.isValidPose,
+            let landmarks = trackingResult.landmarks else { return }
       drawSkeleton(context: context, landmarks: landmarks)
       drawJoints(context: context, landmarks: landmarks)
-      drawIndexTipHighlight(context: context, landmarks: landmarks)
+      drawPinchFeedback(context: context, landmarks: landmarks)
     }
     .allowsHitTesting(false)
   }
@@ -60,8 +61,7 @@ struct HandOverlayView: View {
       path.move(to: start)
       path.addLine(to: end)
     }
-    let skeletonColor: Color = trackingResult.isValidPose ? .white.opacity(0.8) : .red.opacity(0.8)
-    context.stroke(path, with: .color(skeletonColor), lineWidth: 1.5)
+    context.stroke(path, with: .color(.white.opacity(0.8)), lineWidth: 1.5)
   }
 
   private func drawJoints(context: GraphicsContext, landmarks: HandLandmarks) {
@@ -74,30 +74,35 @@ struct HandOverlayView: View {
         width: dotSize,
         height: dotSize
       )
-      let jointColor: Color = trackingResult.isValidPose ? .yellow : .red
-      context.fill(Path(ellipseIn: rect), with: .color(jointColor))
+      context.fill(Path(ellipseIn: rect), with: .color(.yellow))
     }
   }
 
-  private func drawIndexTipHighlight(context: GraphicsContext, landmarks: HandLandmarks) {
-    guard trackingResult.isValidPose else { return }
-    guard let indexTipNorm = landmarks.point(for: .indexTip) else { return }
-    let center = convert(indexTipNorm)
+  /// Draws a line between thumb tip and index PIP to show pinch proximity,
+  /// and highlights both joints green when a pinch is triggered.
+  private func drawPinchFeedback(context: GraphicsContext, landmarks: HandLandmarks) {
+    guard let thumbNorm = landmarks.point(for: .thumbTip),
+          let pipNorm = landmarks.point(for: .indexPIP) else { return }
 
-    switch trackingResult.stillnessState {
-    case .inactive:
-      // No extra highlight beyond the standard yellow joint dot
-      break
+    let thumbPt = convert(thumbNorm)
+    let pipPt = convert(pipNorm)
 
-    case .tracking(let progress):
-      // Green dot (12pt) + partial arc showing progress
-      drawSpotDot(context: context, center: center, size: 12, color: .green)
-      drawProgressArc(context: context, center: center, progress: progress, color: .green)
+    switch trackingResult.pinchState {
+    case .open:
+      // Show a thin line between thumb and PIP so the user can see the gap closing
+      var line = Path()
+      line.move(to: thumbPt)
+      line.addLine(to: pipPt)
+      context.stroke(line, with: .color(.white.opacity(0.5)), lineWidth: 1.5)
 
     case .triggered:
-      // Full green dot (12pt) + complete circle
-      drawSpotDot(context: context, center: center, size: 12, color: .green)
-      drawProgressArc(context: context, center: center, progress: 1.0, color: .green)
+      // Highlight both joints and the connecting line in green during cooldown
+      var line = Path()
+      line.move(to: thumbPt)
+      line.addLine(to: pipPt)
+      context.stroke(line, with: .color(.green), lineWidth: 2.5)
+      drawSpotDot(context: context, center: thumbPt, size: 12, color: .green)
+      drawSpotDot(context: context, center: pipPt, size: 12, color: .green)
     }
   }
 
@@ -109,26 +114,5 @@ struct HandOverlayView: View {
       height: size
     )
     context.fill(Path(ellipseIn: rect), with: .color(color))
-  }
-
-  private func drawProgressArc(
-    context: GraphicsContext,
-    center: CGPoint,
-    progress: Double,
-    color: Color
-  ) {
-    let radius: CGFloat = 18
-    let startAngle = Angle.degrees(-90)
-    let endAngle = Angle.degrees(-90 + 360 * progress)
-
-    var arc = Path()
-    arc.addArc(
-      center: center,
-      radius: radius,
-      startAngle: startAngle,
-      endAngle: endAngle,
-      clockwise: false
-    )
-    context.stroke(arc, with: .color(color), lineWidth: 2.5)
   }
 }

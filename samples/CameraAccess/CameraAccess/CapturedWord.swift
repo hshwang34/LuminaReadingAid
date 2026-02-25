@@ -11,10 +11,16 @@ import Foundation
 final class CapturedWord {
   var text: String
   var capturedAt: Date
+  /// Original crop from the photo (before preprocessing).
+  var imageData: Data?
+  /// Preprocessed crop that was sent to OCR (upscaled + enhanced).
+  var preprocessedImageData: Data?
 
-  init(text: String) {
+  init(text: String, imageData: Data? = nil, preprocessedImageData: Data? = nil) {
     self.text = text
     self.capturedAt = Date()
+    self.imageData = imageData
+    self.preprocessedImageData = preprocessedImageData
   }
 }
 

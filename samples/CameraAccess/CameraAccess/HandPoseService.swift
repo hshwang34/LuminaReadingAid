@@ -2,7 +2,7 @@
 // HandPoseService.swift
 //
 // Vision-based hand pose detection engine. Processes CMSampleBuffer frames on a background
-// serial queue, detects index finger tip position, and tracks stillness duration.
+// serial queue, detects a pinch gesture (thumb tip to index PIP), and manages cooldown state.
 //
 
 import Vision
@@ -10,6 +10,7 @@ import Combine
 import CoreMedia
 import CoreGraphics
 import Foundation
+import ImageIO
 
 final class HandPoseService {
   // MARK: - Public
@@ -24,14 +25,14 @@ final class HandPoseService {
   // Frame skip counter
   private var frameCounter = 0
 
-  // Stillness tracking (accessed only on processingQueue)
-  private var stillnessTracker: StillnessTracker
+  // Pinch tracking (accessed only on processingQueue)
+  private var pinchTracker: PinchTracker
 
   // MARK: - Init
 
   init(config: HandTrackingConfig = .default) {
     self.config = config
-    self.stillnessTracker = StillnessTracker(config: config)
+    self.pinchTracker = PinchTracker(config: config)
   }
 
   // MARK: - Public API
@@ -49,13 +50,51 @@ final class HandPoseService {
     }
   }
 
+  /// Runs a one-shot hand pose detection on a CGImage (e.g. a captured photo).
+  /// Returns the index tip position in Vision normalized coords if a right hand with
+  /// visible key joints is found, nil otherwise.
+  /// Safe to call from any thread — stateless, does not affect the pinch tracker.
+  func detectPointingTip(
+    in cgImage: CGImage,
+    orientation: CGImagePropertyOrientation
+  ) -> CGPoint? {
+    NSLog("[HandPose] photo detection — rawSize=%dx%d orientation=%d",
+          cgImage.width, cgImage.height, orientation.rawValue)
+
+    let request = VNDetectHumanHandPoseRequest()
+    request.maximumHandCount = 1
+    let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
+    do {
+      try handler.perform([request])
+    } catch {
+      NSLog("[HandPose] photo detection error: %@", error.localizedDescription)
+      return nil
+    }
+
+    guard let observation = request.results?.first else {
+      NSLog("[HandPose] no hand detected in photo")
+      return nil
+    }
+
+    let landmarks = extractLandmarks(from: observation)
+
+    guard isValidPose(landmarks) else {
+      NSLog("[HandPose] photo pose invalid (key joints not visible)")
+      return nil
+    }
+
+    guard let tip = landmarks.point(for: .indexTip) else { return nil }
+    NSLog("[HandPose] photo tip detected at (%.3f, %.3f)", tip.x, tip.y)
+    return tip
+  }
+
   /// Clears all accumulated state. Call when streaming stops.
   func reset() {
     processingQueue.async { [weak self] in
       guard let self else { return }
       self.frameCounter = 0
-      self.stillnessTracker.reset()
-      let result = HandTrackingResult(landmarks: nil, stillnessState: .inactive, isValidPose: false, timestamp: Date.timeIntervalSinceReferenceDate)
+      self.pinchTracker.reset()
+      let result = HandTrackingResult(landmarks: nil, pinchState: .open, isValidPose: false, timestamp: Date.timeIntervalSinceReferenceDate)
       self.resultPublisher.send(result)
     }
   }
@@ -66,7 +105,7 @@ final class HandPoseService {
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
     let request = VNDetectHumanHandPoseRequest()
-    request.maximumHandCount = 1
+    request.maximumHandCount = 2
 
     let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
     do {
@@ -75,50 +114,67 @@ final class HandPoseService {
       return
     }
 
-    guard let observation = request.results?.first else {
-      // No hand detected — emit inactive result
-      stillnessTracker.reset()
-      let result = HandTrackingResult(
-        landmarks: nil,
-        stillnessState: .inactive,
-        isValidPose: false,
-        timestamp: Date.timeIntervalSinceReferenceDate
-      )
-      resultPublisher.send(result)
-      return
-    }
-
-    // Extract all joints above confidence threshold
-    let landmarks = extractLandmarks(from: observation)
-
-    // Gate stillness tracking on a valid pointing pose
-    let validPose = isPointingPose(landmarks)
-    guard validPose else {
-      stillnessTracker.reset()
+    guard let observation = request.results?.first(where: { obs in
+      switch obs.chirality {
+      case .right: return true
+      case .left:  return false
+      case .unknown:
+        // Chirality unavailable — fall back to wrist position heuristic.
+        // In the egocentric glasses camera the right hand wrist appears on the
+        // right side of the frame (x > 0.4 in Vision normalized coords).
+        if let wrist = try? obs.recognizedPoint(.wrist), wrist.confidence > 0.3 {
+          return wrist.location.x > 0.4
+        }
+        return false
+      @unknown default: return false
+      }
+    }) else {
+      // No right hand detected — emit open result
+      pinchTracker.reset()
       resultPublisher.send(HandTrackingResult(
-        landmarks: landmarks,
-        stillnessState: .inactive,
+        landmarks: nil,
+        pinchState: .open,
         isValidPose: false,
         timestamp: Date.timeIntervalSinceReferenceDate
       ))
       return
     }
 
-    // Update stillness tracker with index tip position
-    let indexTipPoint = landmarks.point(for: .indexTip)
-    let imageSize = CGSize(
-      width: CVPixelBufferGetWidth(pixelBuffer),
-      height: CVPixelBufferGetHeight(pixelBuffer)
-    )
-    let stillnessState = stillnessTracker.update(
-      normalizedTip: indexTipPoint,
-      imageSize: imageSize,
+    let landmarks = extractLandmarks(from: observation)
+
+    // Log winding order to help calibrate back-of-hand gate.
+    // crossZ < 0  → back of right hand (clockwise winding in Vision coords)
+    // crossZ ≈ 0  → side view (ambiguous)
+    // crossZ > 0  → palm facing camera
+    if let wrist     = landmarks.point(for: .wrist),
+       let thumbCMC  = landmarks.point(for: .thumbCMC),
+       let littleMCP = landmarks.point(for: .littleMCP) {
+      let toThumb  = CGPoint(x: thumbCMC.x  - wrist.x, y: thumbCMC.y  - wrist.y)
+      let toLittle = CGPoint(x: littleMCP.x - wrist.x, y: littleMCP.y - wrist.y)
+      let crossZ   = toThumb.x * toLittle.y - toThumb.y * toLittle.x
+      NSLog("[HandPose] crossZ=%.4f (back<0 side≈0 palm>0)", crossZ)
+    }
+
+    guard isValidPose(landmarks) else {
+      pinchTracker.reset()
+      resultPublisher.send(HandTrackingResult(
+        landmarks: landmarks,
+        pinchState: .open,
+        isValidPose: false,
+        timestamp: Date.timeIntervalSinceReferenceDate
+      ))
+      return
+    }
+
+    let pinchState = pinchTracker.update(
+      thumbTip: landmarks.point(for: .thumbTip),
+      indexPIP: landmarks.point(for: .indexPIP),
       at: Date.timeIntervalSinceReferenceDate
     )
 
     resultPublisher.send(HandTrackingResult(
       landmarks: landmarks,
-      stillnessState: stillnessState,
+      pinchState: pinchState,
       isValidPose: true,
       timestamp: Date.timeIntervalSinceReferenceDate
     ))
@@ -150,112 +206,59 @@ final class HandPoseService {
 
   // MARK: - Pose Validation
 
-  private func dist(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
-    hypot(b.x - a.x, b.y - a.y)
-  }
-
-  /// Returns distance(MCP→Tip) / full finger length. Returns 0 if total length is zero.
-  private func extensionRatio(mcp: CGPoint, pip: CGPoint, dip: CGPoint, tip: CGPoint) -> CGFloat {
-    let totalLength = dist(mcp, pip) + dist(pip, dip) + dist(dip, tip)
-    guard totalLength > 0 else { return 0 }
-    return dist(mcp, tip) / totalLength
-  }
-
-  /// Returns true when landmarks represent a pointing pose:
-  /// index extended, middle curled. Thumb, ring, little ignored.
-  private func isPointingPose(_ landmarks: HandLandmarks) -> Bool {
-    typealias JointName = VNHumanHandPoseObservation.JointName
-
-    func ratio(_ mcp: JointName, _ pip: JointName, _ dip: JointName, _ tip: JointName) -> CGFloat? {
-      guard
-        let m = landmarks.point(for: mcp),
-        let p = landmarks.point(for: pip),
-        let d = landmarks.point(for: dip),
-        let t = landmarks.point(for: tip)
-      else { return nil }
-      return extensionRatio(mcp: m, pip: p, dip: d, tip: t)
-    }
-
-    guard let indexRatio = ratio(.indexMCP, .indexPIP, .indexDIP, .indexTip) else {
-      return false
-    }
-
-    // Missing middle joints → treat as curled (occluded by palm = folded in)
-    let middleRatio = ratio(.middleMCP, .middlePIP, .middleDIP, .middleTip) ?? 0.0
-
-    return indexRatio  > config.indexExtensionThreshold
-        && middleRatio < config.curledExtensionThreshold
+  /// Returns true when the key joints for pinch detection are visible.
+  private func isValidPose(_ landmarks: HandLandmarks) -> Bool {
+    return landmarks.point(for: .thumbTip) != nil
+        && landmarks.point(for: .indexPIP) != nil
   }
 }
 
-// MARK: - StillnessTracker
+// MARK: - PinchTracker
 
-/// Tracks whether the index fingertip has remained within a radius for a given duration.
-private final class StillnessTracker {
+/// Detects when thumb tip comes within a normalized distance of index PIP,
+/// then holds the triggered state until the thumb moves away and a cooldown expires.
+private final class PinchTracker {
   private let config: HandTrackingConfig
 
-  private var anchorPixelPoint: CGPoint?
-  private var trackingStartTime: TimeInterval?
-  private var isTriggered = false
+  private var inCooldown = false
+  private var lastTriggerTime: TimeInterval = 0
 
   init(config: HandTrackingConfig) {
     self.config = config
   }
 
-  /// Returns current stillness state given the normalized (0–1) tip position and image dimensions.
-  func update(normalizedTip: CGPoint?, imageSize: CGSize, at time: TimeInterval) -> StillnessState {
-    guard let normalized = normalizedTip else {
-      reset()
-      return .inactive
+  /// Returns the current pinch state given thumb tip and index PIP in Vision normalized coords.
+  func update(thumbTip: CGPoint?, indexPIP: CGPoint?, at time: TimeInterval) -> PinchState {
+    guard let thumb = thumbTip, let pip = indexPIP else {
+      // Key joints not visible — preserve cooldown so it can't be skipped by briefly hiding hand
+      return inCooldown ? .triggered : .open
     }
 
-    // Convert normalized Vision coords (bottom-left) to pixel coords (top-left)
-    let pixelX = normalized.x * imageSize.width
-    let pixelY = (1.0 - normalized.y) * imageSize.height
-    let pixelPoint = CGPoint(x: pixelX, y: pixelY)
+    let distance = hypot(thumb.x - pip.x, thumb.y - pip.y)
+    NSLog("[Pinch] dist=%.3f (trigger<%.3f release>%.3f) cooldown=%@",
+          distance, config.pinchThreshold, config.pinchReleaseThreshold,
+          inCooldown ? "yes" : "no")
 
-    if let anchor = anchorPixelPoint {
-      let distance = hypot(pixelPoint.x - anchor.x, pixelPoint.y - anchor.y)
-
-      if distance > config.stationaryRadiusPixels {
-        // Finger moved — restart tracking from new position
-        anchorPixelPoint = pixelPoint
-        trackingStartTime = time
-        isTriggered = false
-        return .tracking(progress: 0.0)
+    if inCooldown {
+      // Exit cooldown only when BOTH: time has elapsed AND thumb has moved away
+      let timeElapsed = (time - lastTriggerTime) >= config.pinchCooldownSeconds
+      if distance > config.pinchReleaseThreshold && timeElapsed {
+        inCooldown = false
       }
-
-      // Finger is within radius
-      if isTriggered {
-        return .triggered
-      }
-
-      guard let startTime = trackingStartTime else {
-        trackingStartTime = time
-        return .tracking(progress: 0.0)
-      }
-
-      let elapsed = time - startTime
-      let progress = min(elapsed / config.stationaryDurationSeconds, 1.0)
-
-      if progress >= 1.0 {
-        isTriggered = true
-        return .triggered
-      }
-
-      return .tracking(progress: progress)
-    } else {
-      // First detection
-      anchorPixelPoint = pixelPoint
-      trackingStartTime = time
-      isTriggered = false
-      return .tracking(progress: 0.0)
+      return .triggered
     }
+
+    if distance < config.pinchThreshold {
+      inCooldown = true
+      lastTriggerTime = time
+      return .triggered
+    }
+
+    return .open
   }
 
   func reset() {
-    anchorPixelPoint = nil
-    trackingStartTime = nil
-    isTriggered = false
+    inCooldown = false
+    lastTriggerTime = 0
   }
 }
