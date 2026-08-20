@@ -26,9 +26,26 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
 
   private let synthesizer = AVSpeechSynthesizer()
 
-  /// Utterances handed to the synthesiser that haven't finished or been cancelled.
-  private var outstanding = 0
-  private var waiters: [CheckedContinuation<Void, Never>] = []
+  /// Utterances handed to the synthesiser that haven't finished or been cancelled,
+  /// tracked by identity rather than by count.
+  ///
+  /// A bare counter has two failure modes that both end a voice session: a stale
+  /// `didCancel` from a stopped utterance decrements on behalf of a newer one, and —
+  /// the one that actually bit — release was gated on `synthesizer.isSpeaking`, which
+  /// is often still true at the moment the final `didFinish` arrives, so the last
+  /// callback declined to release and no further callback was ever coming. Anything
+  /// awaiting `finishSpeaking()` then hangs forever; in a session that means the turn
+  /// never completes, the transcriber stays paused, and every wake after the first
+  /// answer lands on a microphone nobody is listening to.
+  private var pending = Set<AVSpeechUtterance>()
+  private var waiters: [(id: UUID, continuation: CheckedContinuation<Void, Never>)] = []
+
+  /// Upper bound on any single `finishSpeaking()` wait. Answers are at most a couple
+  /// of sentences, so half a minute is generously past legitimate speech. This exists
+  /// because the failure mode of a lost synthesiser callback is not a glitch but a
+  /// dead session — the turn never completes and the microphone never resumes — and
+  /// that must not be possible no matter what AVFoundation does.
+  private let waitCeiling: TimeInterval = 30
 
   /// Slightly under the default. Learners are parsing an unfamiliar word, and the
   /// default rate reads as brisk when the content is new.
@@ -43,27 +60,49 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
   // MARK: - TTSEngine
 
   var isSpeaking: Bool {
-    synthesizer.isSpeaking || outstanding > 0
+    synthesizer.isSpeaking || !pending.isEmpty
   }
 
   func enqueue(_ clause: String) {
     let text = clause.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return }
 
-    outstanding += 1
-    synthesizer.speak(makeUtterance(text, rate: rate))
+    let utterance = makeUtterance(text, rate: rate)
+    pending.insert(utterance)
+    synthesizer.speak(utterance)
   }
 
   func finishSpeaking() async {
-    guard isSpeaking else { return }
+    // Wait only when a callback is still owed to us. `synthesizer.isSpeaking` is
+    // deliberately not consulted: it can be true with `pending` empty (the tail of a
+    // cancelled utterance), and waiting on it would be waiting for a callback that
+    // has already happened.
+    guard !pending.isEmpty else { return }
+    let id = UUID()
     await withCheckedContinuation { continuation in
-      waiters.append(continuation)
+      waiters.append((id, continuation))
+      Task { [weak self, waitCeiling] in
+        try? await Task.sleep(for: .seconds(waitCeiling))
+        self?.forceRelease(stuckWaiter: id)
+      }
     }
   }
 
+  /// Watchdog path: a waiter outlived the ceiling, so the callback accounting has
+  /// failed in a way this type promised could not happen. Trust is gone — drop the
+  /// tracking state entirely and let everyone waiting proceed.
+  private func forceRelease(stuckWaiter id: UUID) {
+    guard waiters.contains(where: { $0.id == id }) else { return }
+    pending.removeAll()
+    releaseWaiters()
+  }
+
   func stop() {
+    // Forget ours before stopping: the didCancel callbacks that follow must find
+    // nothing to account for, or they would decrement on behalf of whatever is
+    // enqueued next.
+    pending.removeAll()
     synthesizer.stopSpeaking(at: .immediate)
-    outstanding = 0
     releaseWaiters()
   }
 
@@ -73,9 +112,12 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
 
     // Once deliberately, then once at conversational speed — the pattern a person
     // uses when teaching someone to say a word.
-    outstanding += 2
-    synthesizer.speak(makeUtterance(text, rate: rate * 0.7, postDelay: 0.35))
-    synthesizer.speak(makeUtterance(text, rate: rate))
+    let slow = makeUtterance(text, rate: rate * 0.7, postDelay: 0.35)
+    let natural = makeUtterance(text, rate: rate)
+    pending.insert(slow)
+    pending.insert(natural)
+    synthesizer.speak(slow)
+    synthesizer.speak(natural)
     await finishSpeaking()
   }
 
@@ -106,14 +148,16 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
   }
 
   private func releaseWaiters() {
-    let pending = waiters
+    let released = waiters
     waiters.removeAll()
-    for continuation in pending { continuation.resume() }
+    for waiter in released { waiter.continuation.resume() }
   }
 
-  fileprivate func utteranceFinished() {
-    outstanding = max(0, outstanding - 1)
-    if outstanding == 0 && !synthesizer.isSpeaking {
+  fileprivate func utteranceFinished(_ utterance: AVSpeechUtterance) {
+    // Only account for utterances we are still tracking — a callback for one that
+    // stop() already forgot belongs to a previous life of the queue.
+    guard pending.remove(utterance) != nil else { return }
+    if pending.isEmpty {
       releaseWaiters()
     }
   }
@@ -126,12 +170,12 @@ extension AVSpeechTTSEngine: AVSpeechSynthesizerDelegate {
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
   ) {
-    Task { @MainActor in self.utteranceFinished() }
+    Task { @MainActor in self.utteranceFinished(utterance) }
   }
 
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance
   ) {
-    Task { @MainActor in self.utteranceFinished() }
+    Task { @MainActor in self.utteranceFinished(utterance) }
   }
 }
