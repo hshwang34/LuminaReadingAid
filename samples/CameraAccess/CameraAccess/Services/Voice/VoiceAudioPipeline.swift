@@ -60,9 +60,14 @@ final class VoiceAudioPipeline {
     /// Consecutive loud frames before a burst is declared. Two frames is ~40ms —
     /// enough to reject a click, short enough that the ring buffer covers the rest.
     var attackFrames: Int = 2
-    /// Quiet time before a burst is declared over. Long enough to survive the pause
-    /// between "Hey Luna" and the question that follows it.
-    var releaseSeconds: TimeInterval = 0.7
+    /// Quiet time before a burst is declared over.
+    ///
+    /// This is the pause a person is allowed mid-sentence. 0.7s proved too eager on
+    /// device: "Can you… explain what divine means" was split at the hesitation, and
+    /// half a thought was sent off to be answered. 1.2s survives a natural gather-
+    /// your-words pause; the latency cost is real but is paid once, after the reader
+    /// has finished talking.
+    var releaseSeconds: TimeInterval = 1.2
     /// Audio retained ahead of a burst, replayed into the recogniser when it opens.
     var prerollSeconds: TimeInterval = 1.5
   }

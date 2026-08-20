@@ -335,7 +335,7 @@ final class VoiceSessionController {
 
     armSilenceTimeout()
     Earcon.wake.play()
-    liveTranscript = wake.trailingTranscript
+    liveTranscript = strippingWakeEcho(wake.trailingTranscript)
     phase = .capturingUtterance
     // Safety net, not a deadline: every partial re-arms it, so it only ever fires when
     // the burst-end event failed to arrive — without it, a missed event strands the
@@ -361,7 +361,7 @@ final class VoiceSessionController {
     switch phase {
     case .capturingUtterance:
       // Re-derive rather than remember an offset: partials get rewritten in place.
-      liveTranscript = spotter.trailingUtterance(in: text) ?? text
+      liveTranscript = strippingWakeEcho(spotter.trailingUtterance(in: text) ?? text)
       armWindow(questionWindow)
     case .awaitingQuestion:
       liveTranscript = text
@@ -389,10 +389,11 @@ final class VoiceSessionController {
       // grounds to throw the question away. The partial-derived transcript is the
       // fallback, and the raw text the last resort (the router's core patterns are
       // unanchored, so a stray "hey luna" prefix does not break them).
-      let question = (
-        spotter.trailingUtterance(in: text)
-          ?? (liveTranscript.isEmpty ? text : liveTranscript)
-      ).trimmingCharacters(in: .whitespacesAndNewlines)
+      let question = strippingWakeEcho(
+        (spotter.trailingUtterance(in: text)
+          ?? (liveTranscript.isEmpty ? text : liveTranscript))
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      )
 
       if question.isEmpty {
         // "Hey Luna" and then a pause. Hold the door open rather than making them
@@ -400,13 +401,24 @@ final class VoiceSessionController {
         phase = .awaitingQuestion
         liveTranscript = ""
         armWindow(questionWindow)
+      } else if !isCompleteEnoughToAnswer(question) {
+        // Half a thought — the burst ended inside their hesitation. Keep listening;
+        // the rest of the sentence is coming.
+        Log.session.info("holding — fragment not answerable yet: \"\(question, privacy: .public)\"")
+        phase = .awaitingQuestion
+        armWindow(questionWindow)
       } else {
         runTurn(question, deliberate: true)
       }
 
     case .awaitingQuestion:
-      let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      let question = strippingWakeEcho(text.trimmingCharacters(in: .whitespacesAndNewlines))
       guard !question.isEmpty else { return }
+      guard isCompleteEnoughToAnswer(question) else {
+        Log.session.info("holding — fragment not answerable yet: \"\(question, privacy: .public)\"")
+        armWindow(questionWindow)
+        return
+      }
       cancelWindow()
       runTurn(question, deliberate: true)
 
@@ -424,6 +436,34 @@ final class VoiceSessionController {
     default:
       return
     }
+  }
+
+  /// Strips recogniser artifacts that trail the wake phrase.
+  ///
+  /// While the recogniser is still resolving "Luna" its partials read "Hey Luna Lu",
+  /// and that stray "Lu" survives wake-phrase stripping to masquerade as the question.
+  /// Leading fragments of the name (and stray trigger words) are dropped; anything
+  /// left is the reader's.
+  private func strippingWakeEcho(_ raw: String) -> String {
+    var tokens = raw.split(separator: " ")
+    while let first = tokens.first {
+      let token = first.lowercased().trimmingCharacters(in: .punctuationCharacters)
+      guard token == "hey" || (!token.isEmpty && "luna".hasPrefix(token)) else { break }
+      tokens.removeFirst()
+    }
+    return tokens.joined(separator: " ")
+  }
+
+  /// Whether an utterance is worth a turn, or is half a thought still being formed.
+  ///
+  /// "Can you?" arrives as its own burst when the reader hesitates longer than the
+  /// energy detector's patience. Routing it produces an apology spoken over the rest
+  /// of their sentence — the right response is to keep listening. Anything the
+  /// deterministic table can already route is a complete question regardless of
+  /// length; beyond that, a fragment under four words is treated as unfinished.
+  private func isCompleteEnoughToAnswer(_ question: String) -> Bool {
+    if IntentRouter.deterministic(question, context: context) != nil { return true }
+    return question.split(separator: " ").count >= 4
   }
 
   /// Warm the dictionary while the reader is still talking.

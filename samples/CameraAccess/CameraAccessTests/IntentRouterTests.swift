@@ -196,6 +196,36 @@ final class IntentRouterTests: XCTestCase {
     XCTAssertEqual(intent, .unintelligible)
   }
 
+  // MARK: - Define, inverted and embedded forms
+  //
+  // Every phrasing here was spoken to a real device and routed to `unintelligible`
+  // before these patterns existed — the transcription was perfect and the routing
+  // table simply didn't know the shape.
+
+  func testExplainAndEmbeddedMeansForms() async {
+    var intent = await route("Can you explain what divine means?")
+    XCTAssertEqual(intent, .define(word: "divine", contextSentence: nil))
+
+    intent = await route("do you know what precision means")
+    XCTAssertEqual(intent, .define(word: "precision", contextSentence: nil))
+
+    intent = await route("tell me what ephemeral means")
+    XCTAssertEqual(intent, .define(word: "ephemeral", contextSentence: nil))
+
+    intent = await route("explain perfunctory")
+    XCTAssertEqual(intent, .define(word: "perfunctory", contextSentence: nil))
+
+    intent = await route("could you explain the word divine?")
+    XCTAssertEqual(intent, .define(word: "divine", contextSentence: nil))
+  }
+
+  func testExplainWhatMeansDoesNotCaptureTheWordMeans() async {
+    // "explain what X means" must hit the embedded rule first; the bare `explain`
+    // rule would swallow the clause and extract "means" as the word.
+    let intent = await route("explain what divine means")
+    XCTAssertEqual(intent, .define(word: "divine", contextSentence: nil))
+  }
+
   // MARK: - Word extraction
 
   func testExtractWordHandlesFillerAndPunctuation() {

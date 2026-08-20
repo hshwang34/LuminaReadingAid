@@ -179,6 +179,19 @@ struct IntentRouter: IntentRouting {
       Rule(regex: rx(#"^what does (?:it|that|this word) mean[?.]?$"#)) { _, ctx in
         ctx.lastAnswerWord.map { SessionIntent.define(word: $0, contextSentence: nil) }
       },
+
+      // ── Define, inverted and embedded forms ────────────────────────────────
+      // "Can you explain what divine means?", "do you know what divine means?",
+      // "tell me what divine means" — all carry the same inner clause, so one
+      // unanchored rule covers the lot. It must sit before the bare `explain` rule:
+      // "explain what divine means" would otherwise capture the whole clause and
+      // extract "means" as the word.
+      Rule(regex: rx(#"what (?:the word )?(.+?) means[?.]?$"#)) { g, ctx in
+        resolveWord(g[safe: 1] ?? nil, context: ctx).map { SessionIntent.define(word: $0, contextSentence: nil) }
+      },
+      Rule(regex: rx(#"^(?:can you |could you |please )?explain (?:the word )?(.+?)[?.]?$"#)) { g, ctx in
+        resolveWord(g[safe: 1] ?? nil, context: ctx).map { SessionIntent.define(word: $0, contextSentence: nil) }
+      },
     ]
   }()
 
