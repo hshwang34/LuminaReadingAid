@@ -130,7 +130,14 @@ actor LlamaAnswerEngine: AnswerEngine {
   var readiness: AnswerEngineReadiness { state }
 
   func prepare(onProgress: @Sendable @escaping (AnswerEngineReadiness) -> Void) async throws {
-    if case .ready = state { return }
+    if case .ready = state {
+      // Report anyway. A caller that attached only now has never seen a callback, and
+      // returning in silence leaves it believing the model is still unavailable — which
+      // is exactly what a second session, or any caller after the debug harness has
+      // already loaded the model, would conclude.
+      onProgress(state)
+      return
+    }
 
     do {
       let store = LlamaModelStore.shared

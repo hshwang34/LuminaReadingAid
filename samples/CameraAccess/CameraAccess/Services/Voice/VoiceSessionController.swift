@@ -268,10 +268,25 @@ final class VoiceSessionController {
 
   /// Blocks a turn until the model is usable, or gives up and says so.
   private func ensureModelReady() async -> Bool {
+    // Ask the engine, not the mirrored copy. `readiness` here is only ever as fresh as
+    // the last progress callback, so trusting it makes every turn depend on a
+    // notification that a model loaded before this session began never sends.
+    readiness = await engine.readiness
     if case .ready = readiness { return true }
+
     prepareModelIfNeeded()
     await modelTask?.value
+    readiness = await engine.readiness
     if case .ready = readiness { return true }
+
+    // Never fail a question in silence. Before this, a reader asking a question the
+    // app had decided it could not answer got no speech, no error and no explanation.
+    banner = switch readiness {
+    case .downloading: "Luna is still downloading her language model."
+    case .loading: "Luna is still waking up — ask again in a moment."
+    case .failed(let message): "Luna can't answer: \(message)"
+    default: "Luna isn't ready to answer yet."
+    }
     return false
   }
 

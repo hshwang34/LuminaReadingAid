@@ -111,9 +111,37 @@ struct VoiceSessionView: View {
       Spacer(minLength: Spacing.lg)
 
       footer(controller)
+
+      #if DEBUG
+      debugReadout(controller)
+      #endif
     }
     .padding(.vertical, Spacing.lg)
   }
+
+  #if DEBUG
+  /// The session's internal state, on screen.
+  ///
+  /// A voice session fails quietly by nature — nothing was spoken, and there is no
+  /// screen the reader was looking at to show an error on. Which phase it stalled in
+  /// is the single most useful fact when that happens, and it is invisible otherwise.
+  private func debugReadout(_ controller: VoiceSessionController) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text("phase: \(String(describing: controller.phase))")
+      Text("model: \(String(describing: controller.readiness))")
+      if let ttfa = controller.lastTimeToFirstAudio {
+        Text("first audio: \(Int(ttfa * 1000)) ms")
+      }
+      if !controller.lastQuestion.isEmpty {
+        Text("heard: \(controller.lastQuestion)")
+      }
+    }
+    .font(.caption2.monospaced())
+    .foregroundStyle(.leather.opacity(0.6))
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, Spacing.lg)
+  }
+  #endif
 
   private func header(_ controller: VoiceSessionController) -> some View {
     VStack(spacing: Spacing.sm) {
