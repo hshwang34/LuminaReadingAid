@@ -26,6 +26,7 @@
 
 import Foundation
 import LlamaSwift
+import UIKit
 
 actor LlamaAnswerEngine: AnswerEngine {
 
@@ -53,10 +54,65 @@ actor LlamaAnswerEngine: AnswerEngine {
   /// tokens, and decoding half of one produces mojibake in the spoken answer.
   private var pendingBytes: [UInt8] = []
 
+  /// Consecutive fatal decode failures. One is usually recoverable by clearing the
+  /// KV cache; a second means the context itself is wedged and only a reload helps.
+  private var consecutiveDecodeFailures = 0
+
   private static var backendInitialized = false
 
   private let contextTokens: UInt32 = 2048
   private let batchTokens: UInt32 = 512
+
+  // MARK: - Compute placement
+
+  /// How many layers to offload to Metal. 99 means all of them; 0 means CPU only.
+  ///
+  /// **Defaults to 0, and that is a product decision rather than a tuning choice.**
+  ///
+  /// iOS refuses to execute GPU work for an app that is not frontmost. A Metal command
+  /// buffer submitted from the background fails with
+  /// `kIOGPUCommandBufferCallbackErrorBackgroundExecutionNotPermitted`, llama.cpp
+  /// reports `llama_decode returned -3`, and — worse — the ggml Metal backend latches
+  /// into an error state that survives until the context is recreated. So Metal makes
+  /// answers fast in the hand and impossible with the phone locked, and the locked
+  /// phone is the scenario the whole architecture exists to serve.
+  ///
+  /// CPU inference is slower but has no such restriction, which makes it the only
+  /// setting where the app behaves the same way in every state it can be in.
+  ///
+  /// Persisted rather than passed in because it can only take effect at model load.
+  static var gpuLayers: Int32 {
+    get {
+      let stored = UserDefaults.standard.object(forKey: gpuLayersKey) as? Int
+      return Int32(stored ?? 0)
+    }
+    set { UserDefaults.standard.set(Int(newValue), forKey: gpuLayersKey) }
+  }
+
+  private static let gpuLayersKey = "luna.llama.gpuLayers"
+
+  /// Threads for CPU inference.
+  ///
+  /// Fewer than the core count on purpose. An A16 has two performance cores and four
+  /// efficiency cores; spreading a decode across all six makes every step wait on the
+  /// slowest thread, so the efficiency cores cost throughput rather than adding it.
+  private let threads: Int32 = 4
+
+  /// Change the offload setting and reload the model so it takes effect.
+  func setGPULayers(_ layers: Int32) async throws {
+    guard Self.gpuLayers != layers else { return }
+    Self.gpuLayers = layers
+    guard LlamaModelStore.shared.isModelPresent else { return }
+    let url = LlamaModelStore.shared.modelFileURL
+    state = .loading
+    do {
+      try loadModel(at: url)
+      state = .ready
+    } catch {
+      state = .failed(error.localizedDescription)
+      throw error
+    }
+  }
 
   // MARK: - AnswerEngine
 
@@ -97,7 +153,7 @@ actor LlamaAnswerEngine: AnswerEngine {
           try await self.run(prompt, into: continuation)
           continuation.finish()
         } catch {
-          continuation.finish(throwing: error)
+          continuation.finish(throwing: await self.explain(error))
         }
       }
       continuation.onTermination = { _ in task.cancel() }
@@ -120,7 +176,7 @@ actor LlamaAnswerEngine: AnswerEngine {
 
     var modelParams = llama_model_default_params()
     modelParams.load_mode = LLAMA_LOAD_MODE_MMAP
-    modelParams.n_gpu_layers = 99  // Metal
+    modelParams.n_gpu_layers = Self.gpuLayers
 
     guard let loaded = llama_model_load_from_file(url.path, modelParams) else {
       throw AnswerEngineError.modelLoadFailed("could not open \(url.lastPathComponent)")
@@ -128,14 +184,36 @@ actor LlamaAnswerEngine: AnswerEngine {
     model = loaded
     vocab = llama_model_get_vocab(loaded)
 
-    var ctxParams = llama_context_default_params()
-    ctxParams.n_ctx = contextTokens
-    ctxParams.n_batch = batchTokens
-
-    guard let ctx = llama_init_from_model(loaded, ctxParams) else {
+    do {
+      try makeContext()
+    } catch {
       llama_model_free(loaded)
       model = nil
       vocab = nil
+      throw error
+    }
+  }
+
+  /// Creates the inference context, replacing any existing one.
+  ///
+  /// Separate from model loading because the compute backend lives with the context,
+  /// not the model — so this is also the recovery path after a backend failure, and it
+  /// is far cheaper than re-reading a gigabyte of weights.
+  private func makeContext() throws {
+    guard let model else { throw AnswerEngineError.modelUnavailable }
+
+    if let context { llama_free(context) }
+    context = nil
+    cachedPrefixTokens = 0
+    cachedPrefixMode = nil
+
+    var ctxParams = llama_context_default_params()
+    ctxParams.n_ctx = contextTokens
+    ctxParams.n_batch = batchTokens
+    ctxParams.n_threads = threads
+    ctxParams.n_threads_batch = threads
+
+    guard let ctx = llama_init_from_model(model, ctxParams) else {
       throw AnswerEngineError.modelLoadFailed("could not create context")
     }
     context = ctx
@@ -302,6 +380,64 @@ actor LlamaAnswerEngine: AnswerEngine {
     }
   }
 
+  // MARK: - Failure recovery
+
+  /// Put the context back into a usable state after a fatal decode.
+  ///
+  /// Without this, one failure ends the session: the prefix cache still claims tokens
+  /// that the failed batch may have left half-written, so every subsequent question
+  /// decodes into a corrupted context and fails the same way until the app is
+  /// relaunched. The reader experiences that as "Luna stopped working", which is a
+  /// far worse outcome than one slow answer.
+  private func recoverFromDecodeFailure() {
+    consecutiveDecodeFailures += 1
+    pendingBytes.removeAll(keepingCapacity: true)
+
+    // ggml states the requirement outright: "backend is in error state from a previous
+    // command buffer failure - recreate the backend to recover". Clearing the KV cache
+    // is not enough and never was — the backend lives with the context, so the context
+    // has to be rebuilt. Without this, a single failed decode ends the app's ability to
+    // answer anything until it is relaunched, which is how one locked-screen question
+    // turned into "the model stopped working".
+    do {
+      try makeContext()
+    } catch {
+      unloadLocked()
+      state = .notReady
+      consecutiveDecodeFailures = 0
+      return
+    }
+
+    // A fresh context that fails again is not a transient fault. Drop the model so the
+    // next question pays a full reload rather than failing a third time.
+    if consecutiveDecodeFailures >= 3 {
+      unloadLocked()
+      state = .notReady
+      consecutiveDecodeFailures = 0
+    }
+  }
+
+  /// Adds the reason to a decode failure when the reason is knowable.
+  ///
+  /// `llama_decode returned -3` on its own sends anyone reading it into llama.cpp's
+  /// source. On iOS it almost always means one specific thing, and saying so is the
+  /// difference between a five-minute diagnosis and an afternoon.
+  private func explain(_ error: Error) async -> Error {
+    guard case AnswerEngineError.generationFailed(let detail) = error,
+          detail.contains("llama_decode") else { return error }
+
+    let isForeground = await MainActor.run {
+      UIApplication.shared.applicationState == .active
+    }
+    guard !isForeground, Self.gpuLayers > 0 else { return error }
+
+    return AnswerEngineError.generationFailed(
+      "iOS does not permit GPU work from a backgrounded app, so Metal inference cannot "
+      + "run while the phone is locked (\(detail)). Set the model to CPU only to answer "
+      + "in this state."
+    )
+  }
+
   // MARK: - llama.cpp primitives
 
   private func tokenize(_ text: String, addSpecial: Bool) -> [llama_token] {
@@ -336,10 +472,12 @@ actor LlamaAnswerEngine: AnswerEngine {
         return llama_decode(context, batch)
       }
       guard status == 0 else {
+        recoverFromDecodeFailure()
         throw AnswerEngineError.generationFailed("llama_decode returned \(status)")
       }
       offset = end
     }
+    consecutiveDecodeFailures = 0
   }
 
   /// Converts a token to text, buffering bytes that end mid-UTF8-sequence.

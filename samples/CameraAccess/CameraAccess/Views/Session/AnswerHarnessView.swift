@@ -29,6 +29,7 @@ struct AnswerHarnessView: View {
   @State private var context = SessionContext()
 
   @State private var readiness: AnswerEngineReadiness = .notReady
+  @State private var useMetal = LlamaAnswerEngine.gpuLayers > 0
   @State private var isRunning = false
   @State private var transcript: [Line] = []
   @State private var errorText: String?
@@ -102,6 +103,42 @@ struct AnswerHarnessView: View {
         }
         .buttonStyle(.bordered)
         .tint(.brick)
+      }
+
+      placementControl
+    }
+  }
+
+  /// Metal vs CPU, on device, without a rebuild.
+  ///
+  /// Worth a control rather than a constant because the two settings fail in opposite
+  /// directions: Metal is several times faster but cannot execute at all once the app
+  /// is backgrounded, and the locked phone is the scenario the product is built on.
+  /// The only way to choose is to measure both here.
+  private var placementControl: some View {
+    VStack(alignment: .leading, spacing: Spacing.xs) {
+      Picker("Compute", selection: $useMetal) {
+        Text("CPU only").tag(false)
+        Text("Metal").tag(true)
+      }
+      .pickerStyle(.segmented)
+      .disabled(isPreparing)
+
+      Text(useMetal
+           ? "Faster, but every answer fails once the phone is locked."
+           : "Slower, but answers in every state including locked.")
+        .font(.caption2)
+        .foregroundStyle(.leather)
+    }
+    .onChange(of: useMetal) { _, newValue in
+      Task {
+        errorText = nil
+        do {
+          try await LlamaAnswerEngine.shared.setGPULayers(newValue ? 99 : 0)
+        } catch {
+          errorText = error.localizedDescription
+        }
+        await refreshReadiness()
       }
     }
   }
