@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import os
 import SwiftData
 
 @MainActor
@@ -76,6 +77,7 @@ final class AnswerPipeline {
 
     let started = Date()
     let intent = await router.route(utterance, context: context)
+    Log.answer.info("routed \"\(utterance, privacy: .public)\" → \(String(describing: intent), privacy: .public)")
 
     switch intent {
     case .define(let word, let contextSentence):
@@ -139,6 +141,7 @@ final class AnswerPipeline {
 
     let existing = try? persistence.fetch(word)
     let senses = await senseProvider.senses(for: word, existingDefinition: existing?.definition)
+    Log.answer.info("grounded \"\(word, privacy: .public)\" — \(senses.count, privacy: .public) senses")
 
     let prompt = AnswerPrompt(
       mode: mode,
@@ -159,6 +162,7 @@ final class AnswerPipeline {
       case .speakable(let clause):
         if firstAudio == nil {
           firstAudio = Date()
+          Log.answer.info("first audio at \(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms")
           onFirstAudio?()
         }
         tts.enqueue(clause)
@@ -182,6 +186,7 @@ final class AnswerPipeline {
       contextSentence: contextSentence,
       book: book
     )
+    Log.answer.info("turn complete in \(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms — sense \(answer?.senseID ?? -1, privacy: .public), \(outcome.isNew ? "inserted" : "enriched existing", privacy: .public) \"\(outcome.word.text, privacy: .public)\"")
 
     var next = context
     next.lastAnswerWord = word
@@ -228,6 +233,7 @@ final class AnswerPipeline {
       case .speakable(let clause):
         if firstAudio == nil {
           firstAudio = Date()
+          Log.answer.info("first audio at \(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms")
           onFirstAudio?()
         }
         tts.enqueue(clause)

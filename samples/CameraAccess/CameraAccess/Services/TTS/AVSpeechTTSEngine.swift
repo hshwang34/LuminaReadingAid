@@ -19,6 +19,7 @@
 //
 
 import AVFoundation
+import os
 import Foundation
 
 @MainActor
@@ -67,6 +68,7 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
     let text = clause.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return }
 
+    Log.tts.info("enqueue: \"\(text, privacy: .public)\"")
     let utterance = makeUtterance(text, rate: rate)
     pending.insert(utterance)
     synthesizer.speak(utterance)
@@ -93,6 +95,7 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
   /// tracking state entirely and let everyone waiting proceed.
   private func forceRelease(stuckWaiter id: UUID) {
     guard waiters.contains(where: { $0.id == id }) else { return }
+    Log.tts.fault("watchdog fired — a synthesiser callback was lost; force-releasing \(self.waiters.count, privacy: .public) waiter(s)")
     pending.removeAll()
     releaseWaiters()
   }
@@ -158,6 +161,7 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
     // stop() already forgot belongs to a previous life of the queue.
     guard pending.remove(utterance) != nil else { return }
     if pending.isEmpty {
+      Log.tts.info("queue drained")
       releaseWaiters()
     }
   }

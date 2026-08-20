@@ -18,6 +18,7 @@
 //
 
 import Foundation
+import os
 
 @MainActor
 final class SFSpeechWakeWordSpotter: WakeWordSpotting {
@@ -76,6 +77,7 @@ final class SFSpeechWakeWordSpotter: WakeWordSpotting {
     case .partial(let text):
       guard !hasWokenThisBurst, let match = matcher.match(in: text) else { return }
       hasWokenThisBurst = true
+      Log.wake.info("wake matched \"\(match.matchedPhrase, privacy: .public)\" — trailing: \"\(match.trailing, privacy: .public)\"")
       continuation?.yield(WakeEvent(trailingTranscript: match.trailing))
 
     case .burstEnded:

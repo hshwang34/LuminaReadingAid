@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BF0AA000000000000000301 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000302 /* Log.swift */; };
 		0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */; };
 		0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000204 /* UtteranceTranscriber.swift */; };
 		0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */; };
@@ -164,6 +165,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0BF0AA000000000000000302 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAudioPipeline.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000204 /* UtteranceTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceTranscriber.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFSpeechWakeWordSpotter.swift; sourceTree = "<group>"; };
@@ -369,6 +371,7 @@
 		0BDC74292F844CE700C7B878 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				0BF0AA000000000000000302 /* Log.swift */,
 				0BDC74272F844CE700C7B878 /* DefinitionService.swift */,
 				AA000002288800000000000A /* OnDeviceLLMService.swift */,
 				AA000004288800000000000A /* SpeechService.swift */,
@@ -746,6 +749,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BF0AA000000000000000301 /* Log.swift in Sources */,
 				0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */,
 				0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */,
 				0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */,

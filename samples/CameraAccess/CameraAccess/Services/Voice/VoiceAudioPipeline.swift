@@ -24,6 +24,7 @@
 //
 
 import AVFoundation
+import os
 import Foundation
 import Speech
 
@@ -135,6 +136,7 @@ final class VoiceAudioPipeline {
 
     registerNotifications(session: session)
     isRunning = true
+    Log.audio.info("engine started — \(format.sampleRate, privacy: .public) Hz, \(format.channelCount, privacy: .public) ch")
   }
 
   /// Full teardown, including deactivating the audio session.
@@ -159,6 +161,7 @@ final class VoiceAudioPipeline {
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
       isSessionConfigured = false
     }
+    Log.audio.info("engine stopped (deactivated session: \(deactivateSession, privacy: .public))")
   }
 
   // MARK: - Consumers
@@ -266,6 +269,7 @@ final class VoiceAudioPipeline {
 
     switch type {
     case .began:
+      Log.audio.warning("interruption began — engine paused")
       engine.pause()
       isVoiceActive = false
       observers.send(.interrupted)
@@ -273,6 +277,7 @@ final class VoiceAudioPipeline {
     case .ended:
       let optionsRaw = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
       let shouldResume = AVAudioSession.InterruptionOptions(rawValue: optionsRaw).contains(.shouldResume)
+      Log.audio.info("interruption ended — shouldResume: \(shouldResume, privacy: .public)")
       observers.send(.interruptionEnded(shouldResume: shouldResume))
 
     @unknown default:
@@ -309,6 +314,7 @@ final class VoiceAudioPipeline {
       }
       do {
         try engine.start()
+        Log.audio.info("route changed — tap reinstalled at \(newFormat.sampleRate, privacy: .public) Hz")
         observers.send(.routeChanged)
       } catch {
         isRunning = false
@@ -326,6 +332,7 @@ final class VoiceAudioPipeline {
     inputLevelDB = level
     guard active != isVoiceActive else { return }
     isVoiceActive = active
+    Log.audio.info("\(active ? "voice began" : "voice ended", privacy: .public) (\(Int(level), privacy: .public) dB)")
     observers.send(active ? .voiceBegan : .voiceEnded)
   }
 

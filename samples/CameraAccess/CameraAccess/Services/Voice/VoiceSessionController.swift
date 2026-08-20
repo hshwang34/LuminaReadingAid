@@ -23,6 +23,7 @@
 //
 
 import AudioToolbox
+import os
 import Foundation
 import Observation
 import SwiftData
@@ -81,7 +82,13 @@ final class VoiceSessionController {
 
   // MARK: - Observable state
 
-  private(set) var phase: Phase = .idle
+  private(set) var phase: Phase = .idle {
+    didSet {
+      guard oldValue != phase else { return }
+      // The one line that reconstructs any session bug: every transition, in order.
+      Log.session.info("phase \(String(describing: oldValue), privacy: .public) → \(String(describing: self.phase), privacy: .public)")
+    }
+  }
   /// What the reader is saying right now, wake phrase stripped.
   private(set) var liveTranscript = ""
   private(set) var lastQuestion = ""
@@ -407,7 +414,10 @@ final class VoiceSessionController {
       let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
       // A short fragment during the follow-up window is usually room noise that the
       // recogniser turned into a word, not a question.
-      guard question.split(separator: " ").count >= 2 else { return }
+      guard question.split(separator: " ").count >= 2 else {
+        Log.session.debug("follow-up fragment ignored: \"\(question, privacy: .public)\"")
+        return
+      }
       cancelWindow()
       runTurn(question, deliberate: false)
 
@@ -435,6 +445,7 @@ final class VoiceSessionController {
   private func runTurn(_ utterance: String, deliberate: Bool) {
     guard turnTask == nil else { return }
 
+    Log.session.info("turn started — \(deliberate ? "deliberate" : "follow-up window", privacy: .public): \"\(utterance, privacy: .public)\"")
     cancelWindow()
     armSilenceTimeout()
     lastQuestion = utterance
@@ -453,6 +464,7 @@ final class VoiceSessionController {
       }
 
       guard await ensureModelReady() else {
+        Log.session.error("turn abandoned — model not ready (\(String(describing: self.readiness), privacy: .public))")
         finishTurnAndResumeListening()
         return
       }
@@ -493,8 +505,9 @@ final class VoiceSessionController {
           await tts.finishSpeaking()
         }
       } catch is CancellationError {
-        // Session ended mid-answer.
+        Log.session.info("turn cancelled mid-answer")
       } catch {
+        Log.session.error("turn failed: \(error.localizedDescription, privacy: .public)")
         banner = error.localizedDescription
       }
 

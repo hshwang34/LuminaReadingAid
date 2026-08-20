@@ -22,6 +22,7 @@
 //
 
 import AVFoundation
+import os
 import Foundation
 import Speech
 
@@ -112,6 +113,7 @@ final class UtteranceTranscriber {
   /// the reader.
   func pause() {
     guard isRunning, !isPaused else { return }
+    Log.stt.info("paused — microphone ignored until resume")
     isPaused = true
     endBurst(emit: false)
     pipeline.setDetectionEnabled(false)
@@ -119,6 +121,7 @@ final class UtteranceTranscriber {
 
   func resume() {
     guard isRunning, isPaused else { return }
+    Log.stt.info("resumed — listening again")
     isPaused = false
     currentTranscript = ""
     carryOver = ""
@@ -145,6 +148,7 @@ final class UtteranceTranscriber {
 
   private func beginBurst() {
     guard task == nil else { return }
+    Log.stt.info("burst began — opening recognition task")
     carryOver = ""
     currentTranscript = ""
     burstStartedAt = Date()
@@ -158,7 +162,12 @@ final class UtteranceTranscriber {
     let text = currentTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
     currentTranscript = ""
     carryOver = ""
-    if emit { observers.send(.burstEnded(text)) }
+    if emit {
+      Log.stt.info("burst ended — final: \"\(text, privacy: .public)\"")
+      observers.send(.burstEnded(text))
+    } else {
+      Log.stt.debug("burst closed without emitting")
+    }
   }
 
   /// Opens a recognition task and points the microphone at it.
@@ -235,6 +244,7 @@ final class UtteranceTranscriber {
   /// Only reachable when someone talks for the better part of a minute without the
   /// energy detector ever settling — a café, usually, not a reader.
   private func rotate() {
+    Log.stt.info("rotating recognition task at \(Int(Date().timeIntervalSince(self.burstStartedAt)), privacy: .public)s — carrying \(self.currentTranscript.count, privacy: .public) chars")
     carryOver = currentTranscript
     closeTask()
     burstStartedAt = Date()

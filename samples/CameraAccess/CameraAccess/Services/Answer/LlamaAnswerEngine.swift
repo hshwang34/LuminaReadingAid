@@ -25,6 +25,7 @@
 //
 
 import Foundation
+import os
 import LlamaSwift
 import UIKit
 
@@ -152,7 +153,9 @@ actor LlamaAnswerEngine: AnswerEngine {
 
       state = .loading
       onProgress(state)
+      let loadStarted = Date()
       try loadModel(at: url)
+      Log.llm.info("model loaded in \(Int(Date().timeIntervalSince(loadStarted) * 1000), privacy: .public) ms — \(Self.gpuLayers, privacy: .public) GPU layers")
 
       state = .ready
       onProgress(state)
@@ -269,6 +272,9 @@ actor LlamaAnswerEngine: AnswerEngine {
     let myID = generationID
     pendingBytes.removeAll(keepingCapacity: true)
 
+    let generationStarted = Date()
+    Log.llm.info("generation started — mode \(String(describing: prompt.mode), privacy: .public), word \"\(prompt.word ?? "-", privacy: .public)\"")
+
     // ── Prompt assembly, with prefix reuse ─────────────────────────────────
     if cachedPrefixMode != prompt.mode {
       // Different contract → different system prompt → the cached prefix is wrong.
@@ -280,9 +286,11 @@ actor LlamaAnswerEngine: AnswerEngine {
       try decode(prefix)
       cachedPrefixTokens = Int32(prefix.count)
       cachedPrefixMode = prompt.mode
+      Log.llm.info("system prefix decoded fresh — \(prefix.count, privacy: .public) tokens")
     } else {
       // Keep the system prefix, drop everything after it.
       llama_memory_seq_rm(llama_get_memory(context), 0, cachedPrefixTokens, -1)
+      Log.llm.info("system prefix reused from KV cache — \(self.cachedPrefixTokens, privacy: .public) tokens skipped")
     }
 
     let turn = tokenize(PromptBuilder.turnSuffix(for: prompt), addSpecial: false)
@@ -291,6 +299,7 @@ actor LlamaAnswerEngine: AnswerEngine {
       throw AnswerEngineError.generationFailed("prompt too long for context")
     }
     try decode(turn)
+    Log.llm.info("prefill done — \(turn.count, privacy: .public) turn tokens in \(Int(Date().timeIntervalSince(generationStarted) * 1000), privacy: .public) ms")
 
     // ── Sampler: grammar first so it masks the logits, then greedy ─────────
     let chainParams = llama_sampler_chain_default_params()
@@ -339,6 +348,9 @@ actor LlamaAnswerEngine: AnswerEngine {
       // Lets cancellation and a superseding question actually reach this actor.
       await Task.yield()
     }
+
+    let decodeSeconds = Date().timeIntervalSince(generationStarted)
+    Log.llm.info("generation done — \(produced, privacy: .public) tokens in \(Int(decodeSeconds * 1000), privacy: .public) ms (\(String(format: "%.1f", Double(produced) / max(decodeSeconds, 0.001)), privacy: .public) tok/s)")
 
     if let tail = splitter.flush() {
       continuation.yield(.speakable(tail))
