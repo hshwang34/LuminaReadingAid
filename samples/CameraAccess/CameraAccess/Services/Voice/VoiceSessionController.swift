@@ -245,7 +245,7 @@ final class VoiceSessionController {
   /// Feed a question directly, bypassing the microphone. Used by the debug harness and
   /// by tests; the spoken path funnels into the same method.
   func ask(_ utterance: String) {
-    runTurn(utterance)
+    runTurn(utterance, deliberate: true)
   }
 
   // MARK: - Model
@@ -330,6 +330,10 @@ final class VoiceSessionController {
     Earcon.wake.play()
     liveTranscript = wake.trailingTranscript
     phase = .capturingUtterance
+    // Safety net, not a deadline: every partial re-arms it, so it only ever fires when
+    // the burst-end event failed to arrive — without it, a missed event strands the
+    // session in this phase with nothing to reset it.
+    armWindow(questionWindow)
   }
 
   // MARK: - Transcript
@@ -351,6 +355,7 @@ final class VoiceSessionController {
     case .capturingUtterance:
       // Re-derive rather than remember an offset: partials get rewritten in place.
       liveTranscript = spotter.trailingUtterance(in: text) ?? text
+      armWindow(questionWindow)
     case .awaitingQuestion, .coolingDown:
       liveTranscript = text
     default:
@@ -362,8 +367,18 @@ final class VoiceSessionController {
   private func handleBurstEnded(_ text: String) {
     switch phase {
     case .capturingUtterance:
-      let question = (spotter.trailingUtterance(in: text) ?? "")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+      // Re-derive from the final text, but never *depend* on it. A recogniser rewrites
+      // its transcript when the burst ends, and the rewrite can mangle the wake phrase
+      // out of recognisability — "hey luna what does…" finalising as "Alina, what
+      // does…". The wake already fired; failing to find its phrase again is not
+      // grounds to throw the question away. The partial-derived transcript is the
+      // fallback, and the raw text the last resort (the router's core patterns are
+      // unanchored, so a stray "hey luna" prefix does not break them).
+      let question = (
+        spotter.trailingUtterance(in: text)
+          ?? (liveTranscript.isEmpty ? text : liveTranscript)
+      ).trimmingCharacters(in: .whitespacesAndNewlines)
+
       if question.isEmpty {
         // "Hey Luna" and then a pause. Hold the door open rather than making them
         // say the phrase again.
@@ -371,14 +386,14 @@ final class VoiceSessionController {
         liveTranscript = ""
         armWindow(questionWindow)
       } else {
-        runTurn(question)
+        runTurn(question, deliberate: true)
       }
 
     case .awaitingQuestion:
       let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !question.isEmpty else { return }
       cancelWindow()
-      runTurn(question)
+      runTurn(question, deliberate: true)
 
     case .coolingDown:
       let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -386,7 +401,7 @@ final class VoiceSessionController {
       // recogniser turned into a word, not a question.
       guard question.split(separator: " ").count >= 2 else { return }
       cancelWindow()
-      runTurn(question)
+      runTurn(question, deliberate: false)
 
     default:
       return
@@ -405,7 +420,11 @@ final class VoiceSessionController {
 
   // MARK: - Turn
 
-  private func runTurn(_ utterance: String) {
+  /// - Parameter deliberate: whether the reader summoned Luna for this turn (wake
+  ///   phrase, or the open question window). Deliberate questions are never answered
+  ///   with silence; fragments picked up during the follow-up window are, because they
+  ///   are usually the room and not the reader.
+  private func runTurn(_ utterance: String, deliberate: Bool) {
     guard turnTask == nil else { return }
 
     cancelWindow()
@@ -440,8 +459,31 @@ final class VoiceSessionController {
             self.phase = .responding
           }
         )
-        apply(result)
-        await tts.finishSpeaking()
+
+        // Two intents come back with nothing to say, and a voice interface must never
+        // let "nothing to say" present as a stall.
+        switch result.intent {
+        case .endSession:
+          phase = .responding
+          tts.enqueue("Ending the session. Good reading.")
+          await tts.finishSpeaking()
+          end(.manual)
+          return
+
+        case .unintelligible where deliberate:
+          // They said the wake phrase and asked something; answering that with silence
+          // reads as broken. Say what went wrong and what shape works.
+          phase = .responding
+          tts.enqueue("Sorry, I didn't catch that. Try asking, what does a word mean.")
+          await tts.finishSpeaking()
+
+        case .unintelligible:
+          break  // a follow-up-window fragment — almost always the room, stay quiet
+
+        default:
+          apply(result)
+          await tts.finishSpeaking()
+        }
       } catch is CancellationError {
         // Session ended mid-answer.
       } catch {
@@ -550,7 +592,10 @@ final class VoiceSessionController {
       guard let self else { return }
       try? await Task.sleep(for: .seconds(seconds))
       guard !Task.isCancelled else { return }
-      guard phase == .coolingDown || phase == .awaitingQuestion else { return }
+      switch phase {
+      case .coolingDown, .awaitingQuestion, .capturingUtterance: break
+      default: return
+      }
       liveTranscript = ""
       phase = .listeningIdle
     }
