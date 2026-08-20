@@ -54,15 +54,18 @@ struct IntentRouter: IntentRouting {
     let cleaned = Self.clean(utterance)
     guard !cleaned.isEmpty else { return .unintelligible }
 
-    if let intent = Self.deterministic(cleaned, context: context) {
+    // The model reads every utterance first (user decision 2026-08-20): a regex
+    // table can only ever recognise the phrasings its author thought of, and each
+    // one it missed cost a real reader a real answer. The latency price — one small
+    // classification generation ahead of the answer — is paid knowingly.
+    if let fallback = llmFallback, let intent = await fallback(cleaned, context) {
       return intent
     }
 
-    // Single-word utterances are almost always a misfire or a bare word; asking the
-    // model to classify them wastes a turn.
-    let wordCount = cleaned.split(separator: " ").count
-    if wordCount >= 2, let fallback = llmFallback,
-       let intent = await fallback(cleaned, context) {
+    // The table survives as the emergency path: the model is unavailable, errored,
+    // or classified to a label that maps nowhere. Free, offline, and better than
+    // giving up.
+    if let intent = Self.deterministic(cleaned, context: context) {
       return intent
     }
 
@@ -194,6 +197,43 @@ struct IntentRouter: IntentRouting {
       },
     ]
   }()
+
+  // MARK: LLM fallback mapping
+
+  /// Converts the model's grammar-constrained classification into a session intent.
+  ///
+  /// The model's `word` field gets the same cleanup as regex captures — it echoes the
+  /// reader's phrasing ("the word precision") more often than a bare word — and every
+  /// wordless lookup falls back to the conversation context before giving up.
+  static func intent(
+    fromClassified classified: ClassifiedIntent,
+    utterance: String,
+    context: SessionContext
+  ) -> SessionIntent? {
+    let word = resolveWord(classified.word.isEmpty ? nil : classified.word, context: context)
+
+    switch classified.intent {
+    case "define":
+      guard let word else { return nil }
+      return .define(word: word, contextSentence: nil)
+    case "example":
+      guard let target = word ?? context.lastAnswerWord else { return nil }
+      return .exampleSentence(word: target)
+    case "pronounce":
+      guard let word else { return nil }
+      return .pronounce(word: word)
+    case "repeat":
+      return .repeatLast
+    case "end":
+      return .endSession
+    case "followup":
+      // A follow-up needs something to follow. Without history it would hand the
+      // model an unanchored chat, which is how off-topic rambling starts.
+      return context.lastAnswerWord != nil ? .followUp(question: utterance) : nil
+    default:
+      return nil
+    }
+  }
 
   // MARK: Extraction helpers
 

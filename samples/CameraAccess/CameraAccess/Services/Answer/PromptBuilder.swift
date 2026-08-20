@@ -46,11 +46,28 @@ enum PromptBuilder {
     No text before or after the JSON. /no_think
     """
 
-  /// Intent classification, used only when the deterministic router misses.
+  /// Intent classification — the primary router. Every spoken utterance passes
+  /// through this before anything else happens, so the examples below carry the
+  /// routing quality of the whole app: they cover one canonical phrasing per label
+  /// and two shapes that trip a small model (an embedded "means" clause, and
+  /// speech-recognition debris that must land on "other" rather than a guess).
   static let intentSystemPrompt = """
-    Classify the reader's request about a word.
+    You route a reader's spoken request while they read an English book.
+    Labels: define (asks a word's meaning), example (wants it used in a sentence), \
+    pronounce (wants to hear it said), repeat (say the last answer again), \
+    followup (a further question about the last answer), end (stop the session), \
+    other (noise or none of these).
     Reply with STRICT JSON only:
-    {"intent": "define"|"example"|"pronounce"|"followup"|"end"|"other", "word": "<word or empty>"}
+    {"intent": "define"|"example"|"pronounce"|"repeat"|"followup"|"end"|"other", "word": "<the word asked about, or empty>"}
+
+    Utterance: "what does ephemeral mean" -> {"intent": "define", "word": "ephemeral"}
+    Utterance: "can you explain what divine means" -> {"intent": "define", "word": "divine"}
+    Utterance: "use it in a sentence" -> {"intent": "example", "word": ""}
+    Utterance: "how do you say perfunctory" -> {"intent": "pronounce", "word": "perfunctory"}
+    Utterance: "wait say that again" -> {"intent": "repeat", "word": ""}
+    Utterance: "why is it spelled that way" -> {"intent": "followup", "word": ""}
+    Utterance: "okay that's all for today" -> {"intent": "end", "word": ""}
+    Utterance: "hello hello hello" -> {"intent": "other", "word": ""}
     No text before or after the JSON. /no_think
     """
 

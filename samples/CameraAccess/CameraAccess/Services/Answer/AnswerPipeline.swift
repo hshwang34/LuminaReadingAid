@@ -50,15 +50,39 @@ final class AnswerPipeline {
   init(
     engine: AnswerEngine = LlamaAnswerEngine.shared,
     tts: TTSEngine,
-    router: IntentRouting = IntentRouter(),
+    router: IntentRouting? = nil,
     senseProvider: SenseProvider = .shared,
     modelContext: ModelContext
   ) {
     self.engine = engine
     self.tts = tts
-    self.router = router
+    // The router's fallback was designed in from the start and then never wired up,
+    // which quietly demoted every unrecognised phrasing to "unintelligible". Regex
+    // still answers the common shapes in microseconds; the model only sees the
+    // misses, under a grammar that admits nothing but a valid classification.
+    self.router = router ?? IntentRouter(llmFallback: Self.classifyWithModel(engine))
     self.senseProvider = senseProvider
     self.persistence = WordPersistenceService(context: modelContext)
+  }
+
+  /// The LLM leg of routing: ask the model what the reader meant.
+  private static func classifyWithModel(_ engine: AnswerEngine) -> IntentRouter.LLMFallback {
+    { utterance, context in
+      let prompt = AnswerPrompt(mode: .intentClassification, utterance: utterance)
+      do {
+        for try await event in engine.generate(prompt) {
+          if case .final(.classified(let classified)) = event {
+            Log.answer.info("llm classified \"\(utterance, privacy: .public)\" → \(classified.intent, privacy: .public) \"\(classified.word, privacy: .public)\"")
+            return IntentRouter.intent(
+              fromClassified: classified, utterance: utterance, context: context
+            )
+          }
+        }
+      } catch {
+        Log.answer.error("llm classification failed: \(error.localizedDescription, privacy: .public)")
+      }
+      return nil
+    }
   }
 
   // MARK: - Entry point

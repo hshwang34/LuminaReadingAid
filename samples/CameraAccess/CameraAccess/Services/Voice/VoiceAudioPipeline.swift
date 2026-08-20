@@ -189,6 +189,13 @@ final class VoiceAudioPipeline {
     tap.preroll()
   }
 
+  /// Attach a sink and replay everything buffered since before the burst began —
+  /// preroll and the post-activation gap alike — in order, losslessly.
+  @discardableResult
+  func attachSinkReplayingBuffered(_ sink: @escaping @Sendable (AVAudioPCMBuffer) -> Void) -> UUID {
+    tap.attachSinkDrainingRing(sink)
+  }
+
   /// Stop and start energy detection without touching the engine. Used while Luna is
   /// speaking: her own voice comes back through the microphone, and with no echo
   /// cancellation in v1 the only honest response is to stop listening until she
@@ -443,6 +450,25 @@ private final class TapProcessor: @unchecked Sendable {
     return id
   }
 
+  /// Attach a sink and hand it everything retained so far, atomically.
+  ///
+  /// The drain happens under the lock on purpose: if the sink were installed first,
+  /// a buffer arriving from the audio thread could be delivered ahead of the older
+  /// ring contents and the recogniser would hear the burst out of order. The audio
+  /// thread blocks for the duration of the drain, which is a handful of memcpy-sized
+  /// appends — microseconds against a 1024-frame buffer cadence.
+  @discardableResult
+  func attachSinkDrainingRing(_ sink: @escaping @Sendable (AVAudioPCMBuffer) -> Void) -> UUID {
+    let id = UUID()
+    lock.lock()
+    for buffer in ring { sink(buffer) }
+    ring.removeAll()
+    ringFrames = 0
+    sinks[id] = sink
+    lock.unlock()
+    return id
+  }
+
   func removeSink(_ id: UUID) {
     lock.lock()
     sinks.removeValue(forKey: id)
@@ -497,10 +523,16 @@ private final class TapProcessor: @unchecked Sendable {
     // Snapshot everything the caller needs while still holding the lock, then do the
     // actual work outside it — a sink that blocks must never block the tap's state.
     var sinksToCall: [@Sendable (AVAudioPCMBuffer) -> Void] = []
-    if isActive {
+    if isActive, !sinks.isEmpty {
       // Live audio goes to the recogniser; the ring is only for what came before.
       sinksToCall = Array(sinks.values)
     } else {
+      // Retaining *while active but sinkless* is what makes the seam lossless. The
+      // recogniser attaches on the main actor, tens to hundreds of milliseconds after
+      // the detector flips — exactly while the reader's first words are being spoken.
+      // On device this surfaced as "What does check mean" transcribing as "Check
+      // mean": the preroll covered the audio before activation, and nothing covered
+      // the hop. Everything lands in the ring until a sink drains it.
       retainForPreroll(buffer)
     }
     let handler = transition == nil ? nil : onActivity

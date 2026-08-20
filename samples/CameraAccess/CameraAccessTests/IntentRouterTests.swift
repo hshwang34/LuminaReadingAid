@@ -15,6 +15,9 @@ import XCTest
 
 final class IntentRouterTests: XCTestCase {
 
+  // No LLM fallback injected: with model-first routing these tests exercise the
+  // emergency table — the path that answers when the model can't. The classifier's
+  // own behaviour is prompt+grammar, verified on device.
   private let router = IntentRouter()
 
   private func route(_ utterance: String, context: SessionContext = .empty) async -> SessionIntent {

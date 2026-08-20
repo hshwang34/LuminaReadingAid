@@ -125,6 +125,14 @@ enum AnswerField: Sendable, Equatable {
 enum AnswerOutcome: Sendable, Equatable {
   case grounded(GroundedAnswer)
   case followUp(FollowUpAnswer)
+  case classified(ClassifiedIntent)
+}
+
+/// The model's reading of an utterance the deterministic router could not place.
+/// Grammar-constrained, so `intent` is always one of the known labels.
+struct ClassifiedIntent: Codable, Sendable, Equatable {
+  let intent: String
+  let word: String
 }
 
 enum AnswerStreamEvent: Sendable, Equatable {
@@ -257,6 +265,11 @@ enum AnswerSchema {
     .init(key: "confidence", isQuoted: true),
   ]
 
+  static let intentKeys: [StreamingJSONFieldScanner.ExpectedField] = [
+    .init(key: "intent", isQuoted: true),
+    .init(key: "word", isQuoted: true),
+  ]
+
   /// GBNF grammar for the grounded answer. Consumed by llama.cpp's grammar sampler.
   static let groundedGrammar = #"""
   root  ::= "{" ws "\"sense_id\"" ws ":" ws [0-5] ws "," ws "\"short_gloss\"" ws ":" ws str ws "," ws "\"example\"" ws ":" ws str ws "," ws "\"confidence\"" ws ":" ws conf ws "}"
@@ -273,10 +286,12 @@ enum AnswerSchema {
   ws    ::= [ \t\n]?
   """#
 
-  /// GBNF grammar for the rare intent-classification fallback.
+  /// GBNF grammar for intent classification — the primary router (user decision
+  /// 2026-08-20: every utterance goes through the model; the regex table is only an
+  /// emergency fallback when the model itself fails).
   static let intentGrammar = #"""
   root   ::= "{" ws "\"intent\"" ws ":" ws intent ws "," ws "\"word\"" ws ":" ws str ws "}"
-  intent ::= "\"define\"" | "\"example\"" | "\"pronounce\"" | "\"followup\"" | "\"end\"" | "\"other\""
+  intent ::= "\"define\"" | "\"example\"" | "\"pronounce\"" | "\"repeat\"" | "\"followup\"" | "\"end\"" | "\"other\""
   str    ::= "\"" ([^"\\\x00-\x1F] | "\\" ["\\bfnrt/])* "\""
   ws     ::= [ \t\n]?
   """#

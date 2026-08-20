@@ -317,9 +317,12 @@ actor LlamaAnswerEngine: AnswerEngine {
     llama_sampler_chain_add(chain, llama_sampler_init_greedy())
 
     // ── Decode loop ─────────────────────────────────────────────────────────
-    var scanner = StreamingJSONFieldScanner(
-      expected: prompt.mode == .followUp ? AnswerSchema.followUpKeys : AnswerSchema.groundedKeys
-    )
+    let expectedKeys: [StreamingJSONFieldScanner.ExpectedField] = switch prompt.mode {
+    case .followUp: AnswerSchema.followUpKeys
+    case .intentClassification: AnswerSchema.intentKeys
+    case .define, .exampleSentence: AnswerSchema.groundedKeys
+    }
+    var scanner = StreamingJSONFieldScanner(expected: expectedKeys)
     var splitter = ClauseSplitter()
     var produced = 0
     let limit = PromptBuilder.maxTokens(for: prompt.mode)
@@ -358,10 +361,14 @@ actor LlamaAnswerEngine: AnswerEngine {
 
     // ── Authoritative result ────────────────────────────────────────────────
     // The incremental events exist for latency; this decode is what the app trusts.
-    if prompt.mode == .followUp {
+    switch prompt.mode {
+    case .followUp:
       let answer = try scanner.decode(FollowUpAnswer.self)
       continuation.yield(.final(.followUp(answer)))
-    } else {
+    case .intentClassification:
+      let classified = try scanner.decode(ClassifiedIntent.self)
+      continuation.yield(.final(.classified(classified)))
+    case .define, .exampleSentence:
       let raw = try scanner.decode(GroundedAnswer.self)
       continuation.yield(.final(.grounded(raw.validated(againstSenseCount: prompt.candidateSenses.count))))
     }

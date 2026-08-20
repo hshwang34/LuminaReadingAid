@@ -205,11 +205,17 @@ final class UtteranceTranscriber {
     }
 
     if replayingPreroll {
-      for buffer in pipeline.preroll() { request.append(buffer) }
-    }
-
-    sinkID = pipeline.addSink { [weak request] buffer in
-      request?.append(buffer)
+      // One atomic attach: preroll, the audio that arrived while this very call was
+      // being scheduled, and the live stream — in order, with nothing dropped at the
+      // seams. Split into replay-then-attach, the gap between the two calls loses
+      // the reader's first words.
+      sinkID = pipeline.attachSinkReplayingBuffered { [weak request] buffer in
+        request?.append(buffer)
+      }
+    } else {
+      sinkID = pipeline.addSink { [weak request] buffer in
+        request?.append(buffer)
+      }
     }
   }
 
