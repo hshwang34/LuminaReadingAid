@@ -356,8 +356,16 @@ final class VoiceSessionController {
       // Re-derive rather than remember an offset: partials get rewritten in place.
       liveTranscript = spotter.trailingUtterance(in: text) ?? text
       armWindow(questionWindow)
-    case .awaitingQuestion, .coolingDown:
+    case .awaitingQuestion:
       liveTranscript = text
+      // The reader is mid-question. Without this the window keeps ticking from when
+      // it was armed, expires under their sentence, and the question they finish a
+      // moment later lands in listeningIdle and is discarded — a wake, a perfect
+      // transcription, and then nothing. A window's clock must only run in silence.
+      armWindow(questionWindow)
+    case .coolingDown:
+      liveTranscript = text
+      armWindow(followUpWindow)
     default:
       return
     }
@@ -595,6 +603,14 @@ final class VoiceSessionController {
       switch phase {
       case .coolingDown, .awaitingQuestion, .capturingUtterance: break
       default: return
+      }
+      // Same rule, enforced at the point of expiry: partials re-arm this timer, but a
+      // partial can lag the sound itself, so the energy detector is the authority. If
+      // someone is audibly talking, give them the window again rather than closing it
+      // over their sentence.
+      if pipeline.isVoiceActive {
+        armWindow(seconds)
+        return
       }
       liveTranscript = ""
       phase = .listeningIdle
