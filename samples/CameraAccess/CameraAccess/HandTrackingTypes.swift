@@ -12,8 +12,14 @@ import CoreGraphics
 struct HandTrackingConfig {
   /// Process every Nth frame (3 = ~5fps hand tracking at 15fps stream)
   let frameSkip: Int = 3
-  /// Minimum confidence threshold for landmark detection
+  /// Minimum confidence threshold for general landmark detection (skeleton rendering, etc.)
   let minimumConfidence: Float = 0.3
+  /// Strict confidence threshold for key pinch joints (thumbTip, indexTip, indexPIP).
+  /// A hand is only considered for gesture triggers when all three exceed this value.
+  /// Purpose: reject ambiguous palm-up poses where the index finger is occluded (e.g.
+  /// left hand holding a book), which the 2D crossZ gate cannot distinguish from a
+  /// right hand.
+  let keyJointConfidence: Float = 0.7
   /// Normalized Vision distance (0–1) below which thumb tip to index PIP counts as a pinch
   let pinchThreshold: CGFloat = 0.05
   /// Normalized Vision distance above which the pinch is considered released (hysteresis)
@@ -50,12 +56,17 @@ struct HandTrackingResult {
   let pinchState: PinchState
   let isValidPose: Bool
   let timestamp: TimeInterval
+  /// Raw normalized distance between thumb tip and index PIP (0–1).
+  /// Used by HighlightGestureTracker for continuous pinch monitoring (bypasses PinchTracker cooldown).
+  /// nil when either joint is not visible.
+  let pinchDistance: CGFloat?
 
   static let empty = HandTrackingResult(
     landmarks: nil,
     pinchState: .open,
     isValidPose: false,
-    timestamp: 0
+    timestamp: 0,
+    pinchDistance: nil
   )
 }
 

@@ -21,23 +21,27 @@ struct CustomButton: View {
   let action: () -> Void
 
   enum ButtonStyle {
-    case primary, destructive
+    case primary, secondary, destructive
 
     var backgroundColor: Color {
       switch self {
       case .primary:
-        return .appPrimary
+        return .ink
+      case .secondary:
+        return .ink.opacity(0.08)
       case .destructive:
-        return .destructiveBackground
+        return .brick.opacity(0.15)
       }
     }
 
     var foregroundColor: Color {
       switch self {
       case .primary:
-        return .white
+        return .parchment
+      case .secondary:
+        return .ink
       case .destructive:
-        return .destructiveForeground
+        return .brick
       }
     }
   }
@@ -50,7 +54,7 @@ struct CustomButton: View {
         .frame(maxWidth: .infinity)
         .frame(height: 56)
         .background(style.backgroundColor)
-        .cornerRadius(30)
+        .cornerRadius(CornerRadius.button)
     }
     .disabled(isDisabled)
     .opacity(isDisabled ? 0.6 : 1.0)

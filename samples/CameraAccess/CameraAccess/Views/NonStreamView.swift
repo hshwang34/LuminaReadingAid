@@ -19,6 +19,8 @@ import SwiftUI
 struct NonStreamView: View {
   @ObservedObject var viewModel: StreamSessionViewModel
   @ObservedObject var wearablesVM: WearablesViewModel
+  var cameraMode: CameraMode = .glasses
+  @Environment(\.dismiss) private var dismiss
   @State private var sheetHeight: CGFloat = 300
 
   var body: some View {
@@ -27,36 +29,48 @@ struct NonStreamView: View {
 
       VStack {
         HStack {
-          Spacer()
-          Menu {
-            Button("Disconnect", role: .destructive) {
-              wearablesVM.disconnectGlasses()
-            }
-            .disabled(wearablesVM.registrationState != .registered)
+          Button {
+            dismiss()
           } label: {
-            Image(systemName: "gearshape")
+            Image(systemName: "xmark")
               .resizable()
               .aspectRatio(contentMode: .fit)
               .foregroundColor(.white)
-              .frame(width: 24, height: 24)
+              .frame(width: 16, height: 16)
+          }
+          Spacer()
+          if cameraMode == .glasses {
+            Menu {
+              Button("Disconnect", role: .destructive) {
+                wearablesVM.disconnectGlasses()
+              }
+              .disabled(wearablesVM.registrationState != .registered)
+            } label: {
+              Image(systemName: "gearshape")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundColor(.white)
+                .frame(width: 24, height: 24)
+            }
           }
         }
 
         Spacer()
 
         VStack(spacing: 12) {
-          Image(.cameraAccessIcon)
+          Image(systemName: "camera.fill")
             .resizable()
-            .renderingMode(.template)
-            .foregroundColor(.white)
             .aspectRatio(contentMode: .fit)
-            .frame(width: 120)
+            .foregroundColor(.white)
+            .frame(width: 60, height: 60)
 
-          Text("Stream Your Glasses Camera")
+          Text(cameraMode == .phoneCamera ? "Phone Camera" : "Stream Your Glasses Camera")
             .font(.system(size: 20, weight: .semibold))
             .foregroundColor(.white)
 
-          Text("Tap the Start streaming button to stream video from your glasses or use the camera button to take a photo from your glasses.")
+          Text(cameraMode == .phoneCamera
+               ? "Tap Start streaming to use your phone's rear camera for testing hand tracking and OCR."
+               : "Tap the Start streaming button to stream video from your glasses or use the camera button to take a photo from your glasses.")
             .font(.system(size: 15))
             .multilineTextAlignment(.center)
             .foregroundColor(.white)
@@ -65,19 +79,21 @@ struct NonStreamView: View {
 
         Spacer()
 
-        HStack(spacing: 8) {
-          Image(systemName: "hourglass")
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .foregroundColor(.white.opacity(0.7))
-            .frame(width: 16, height: 16)
+        if cameraMode == .glasses {
+          HStack(spacing: 8) {
+            Image(systemName: "hourglass")
+              .resizable()
+              .aspectRatio(contentMode: .fit)
+              .foregroundColor(.white.opacity(0.7))
+              .frame(width: 16, height: 16)
 
-          Text("Waiting for an active device")
-            .font(.system(size: 14))
-            .foregroundColor(.white.opacity(0.7))
+            Text("Waiting for an active device")
+              .font(.system(size: 14))
+              .foregroundColor(.white.opacity(0.7))
+          }
+          .padding(.bottom, 12)
+          .opacity(viewModel.hasActiveDevice ? 0 : 1)
         }
-        .padding(.bottom, 12)
-        .opacity(viewModel.hasActiveDevice ? 0 : 1)
 
         CustomButton(
           title: "Start streaming",

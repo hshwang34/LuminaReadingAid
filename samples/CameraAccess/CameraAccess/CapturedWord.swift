@@ -16,11 +16,32 @@ final class CapturedWord {
   /// Preprocessed crop that was sent to OCR (upscaled + enhanced).
   var preprocessedImageData: Data?
 
-  init(text: String, imageData: Data? = nil, preprocessedImageData: Data? = nil) {
+  // Context from the surrounding text (sentences above the word on the same page)
+  var contextPhrase: String?
+
+  // Word enrichment (populated via LLM lookup)
+  var definition: String?
+  var pronunciation: String?
+  var exampleSentence: String?
+
+  // Learning & practice
+  var isStarred: Bool = false
+  var masteryLevel: Int = 0
+  var nextReviewDate: Date?
+
+  // Book association
+  var book: Book?
+  /// Page number at the time of capture, if the reading session had committed one.
+  var pageNumber: Int?
+
+  init(text: String, imageData: Data? = nil, preprocessedImageData: Data? = nil, contextPhrase: String? = nil, book: Book? = nil, pageNumber: Int? = nil) {
     self.text = text
     self.capturedAt = Date()
     self.imageData = imageData
     self.preprocessedImageData = preprocessedImageData
+    self.contextPhrase = contextPhrase
+    self.book = book
+    self.pageNumber = pageNumber
   }
 }
 
@@ -29,6 +50,6 @@ final class CapturedWord {
 enum AppContainer {
   /// Single ModelContainer for the app. Created once and reused everywhere.
   static let shared: ModelContainer = {
-    try! ModelContainer(for: CapturedWord.self)
+    try! ModelContainer(for: Book.self, ReadingSession.self, CapturedWord.self, CapturedPassage.self, QuizResult.self)
   }()
 }

@@ -46,8 +46,14 @@
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Needed to connect to Meta AI Glasses</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Used for phone camera testing mode to read text and track hand gestures.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Used for voice interaction when looking up words while reading.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>This app needs access to save photos captured from your glasses.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Used to transcribe spoken questions about captured words.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -18,12 +18,13 @@ import SwiftUI
 
 struct HomeScreenView: View {
   @ObservedObject var viewModel: WearablesViewModel
+  var onPhoneCameraSelected: () -> Void = {}
 
   var body: some View {
     ZStack {
-      Color.white.edgesIgnoringSafeArea(.all)
+      Color.parchment.edgesIgnoringSafeArea(.all)
 
-      VStack(spacing: 12) {
+      VStack(spacing: Spacing.md) {
         Spacer()
 
         Image(.cameraAccessIcon)
@@ -31,7 +32,7 @@ struct HomeScreenView: View {
           .aspectRatio(contentMode: .fit)
           .frame(width: 120)
 
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.md) {
           HomeTipItemView(
             resource: .smartGlassesIcon,
             title: "Video Capture",
@@ -51,13 +52,13 @@ struct HomeScreenView: View {
 
         Spacer()
 
-        VStack(spacing: 20) {
-          Text("You'll be redirected to the Meta AI app to confirm your connection.")
+        VStack(spacing: 12) {
+          Text("Connect your glasses, or use your phone camera for testing.")
             .font(.system(size: 14))
-            .foregroundColor(.gray)
+            .foregroundColor(.leather)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Spacing.md)
 
           CustomButton(
             title: viewModel.registrationState == .registering ? "Connecting..." : "Connect my glasses",
@@ -66,9 +67,17 @@ struct HomeScreenView: View {
           ) {
             viewModel.connectGlasses()
           }
+
+          CustomButton(
+            title: "Use Phone Camera",
+            style: .secondary,
+            isDisabled: false
+          ) {
+            onPhoneCameraSelected()
+          }
         }
       }
-      .padding(.all, 24)
+      .padding(.all, Spacing.xl)
     }
   }
 
@@ -80,24 +89,24 @@ struct HomeTipItemView: View {
   let text: String
 
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
+    HStack(alignment: .top, spacing: Spacing.md) {
       Image(resource)
         .resizable()
         .renderingMode(.template)
-        .foregroundColor(.black)
+        .foregroundColor(.ink)
         .aspectRatio(contentMode: .fit)
         .frame(width: 24)
-        .padding(.leading, 4)
-        .padding(.top, 4)
+        .padding(.leading, Spacing.xs)
+        .padding(.top, Spacing.xs)
 
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: Spacing.sm) {
         Text(title)
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundColor(.black)
+          .font(.serif(.headline, weight: .semibold))
+          .foregroundColor(.ink)
 
         Text(text)
           .font(.system(size: 15))
-          .foregroundColor(.gray)
+          .foregroundColor(.leather)
       }
       Spacer()
     }

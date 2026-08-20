@@ -1,0 +1,105 @@
+import Foundation
+
+struct WordDefinition {
+  let definition: String
+  let pronunciation: String
+  let exampleSentence: String
+}
+
+actor DefinitionService {
+
+  func lookUp(word: String) async throws -> WordDefinition {
+    let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+          let url = URL(string: "https://api.dictionaryapi.dev/api/v2/entries/en/\(encoded)") else {
+      throw DefinitionError.parseError
+    }
+
+    let (data, response) = try await URLSession.shared.data(from: url)
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw DefinitionError.apiError
+    }
+
+    if httpResponse.statusCode == 404 {
+      throw DefinitionError.notFound
+    }
+
+    guard httpResponse.statusCode == 200 else {
+      throw DefinitionError.apiError
+    }
+
+    let entries = try JSONDecoder().decode([DictionaryEntry].self, from: data)
+    guard let entry = entries.first else {
+      throw DefinitionError.notFound
+    }
+
+    // Extract pronunciation: prefer top-level `phonetic`, fall back to first non-empty phonetics[].text
+    let pronunciation = entry.phonetic
+      ?? entry.phonetics?.first(where: { $0.text?.isEmpty == false })?.text
+      ?? ""
+
+    // Extract first definition and example across all meanings
+    var definitionText = ""
+    var exampleText = ""
+    outer: for meaning in entry.meanings ?? [] {
+      let pos = meaning.partOfSpeech ?? ""
+      for def in meaning.definitions ?? [] {
+        if definitionText.isEmpty, let d = def.definition, !d.isEmpty {
+          definitionText = pos.isEmpty ? d : "(\(pos)) \(d)"
+        }
+        if exampleText.isEmpty, let e = def.example, !e.isEmpty {
+          exampleText = e
+        }
+        if !definitionText.isEmpty && !exampleText.isEmpty { break outer }
+      }
+    }
+
+    guard !definitionText.isEmpty else {
+      throw DefinitionError.notFound
+    }
+
+    return WordDefinition(
+      definition: definitionText,
+      pronunciation: pronunciation,
+      exampleSentence: exampleText
+    )
+  }
+
+  enum DefinitionError: LocalizedError {
+    case apiError
+    case parseError
+    case notFound
+
+    var errorDescription: String? {
+      switch self {
+      case .apiError: "Failed to reach the dictionary service."
+      case .parseError: "Could not parse the dictionary response."
+      case .notFound: "No definition found for this word."
+      }
+    }
+  }
+}
+
+// MARK: - dictionaryapi.dev response types
+
+private struct DictionaryEntry: Decodable {
+  let word: String?
+  let phonetic: String?
+  let phonetics: [Phonetic]?
+  let meanings: [Meaning]?
+}
+
+private struct Phonetic: Decodable {
+  let text: String?
+}
+
+private struct Meaning: Decodable {
+  let partOfSpeech: String?
+  let definitions: [Definition]?
+}
+
+private struct Definition: Decodable {
+  let definition: String?
+  let example: String?
+}

@@ -20,6 +20,7 @@ import SwiftUI
 struct MainAppView: View {
   let wearables: WearablesInterface
   @ObservedObject private var viewModel: WearablesViewModel
+  @AppStorage(OnboardingViewModel.hasCompletedKey) private var hasCompletedOnboarding: Bool = false
 
   init(wearables: WearablesInterface, viewModel: WearablesViewModel) {
     self.wearables = wearables
@@ -27,11 +28,18 @@ struct MainAppView: View {
   }
 
   var body: some View {
-    if viewModel.registrationState == .registered || viewModel.hasMockDevice {
-      StreamSessionView(wearables: wearables, wearablesVM: viewModel)
-    } else {
-      // User not registered - show registration/onboarding flow
-      HomeScreenView(viewModel: viewModel)
+    Group {
+      if viewModel.registrationState == .registered || viewModel.hasMockDevice {
+        RootTabView(wearables: wearables, wearablesVM: viewModel)
+      } else {
+        HomeScreenView(viewModel: viewModel)
+      }
+    }
+    .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
+      OnboardingCoordinatorView(wearablesViewModel: viewModel) {
+        hasCompletedOnboarding = true
+      }
+      .interactiveDismissDisabled(true)
     }
   }
 }

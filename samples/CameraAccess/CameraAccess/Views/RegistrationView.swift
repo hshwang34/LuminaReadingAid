@@ -37,8 +37,8 @@ struct RegistrationView: View {
             // Pass the callback URL to the DAT SDK for processing
             // This handles registration completion and permission grant responses
             _ = try await Wearables.shared.handleUrl(url)
-          } catch let error as RegistrationError {
-            viewModel.showError(error.description)
+          } catch let error as WearablesHandleURLError {
+            viewModel.showError(error.localizedDescription)
           } catch {
             viewModel.showError("Unknown error: \(error.localizedDescription)")
           }
