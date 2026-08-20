@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */; };
+		0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000204 /* UtteranceTranscriber.swift */; };
+		0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */; };
+		0BF0AA000000000000000207 /* VoiceSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000208 /* VoiceSessionController.swift */; };
+		0BF0AA000000000000000209 /* VoiceSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA00000000000000020A /* VoiceSessionView.swift */; };
 		0BF0AA0000000000000000B8 /* SenseProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F8 /* SenseProvider.swift */; };
 		0BF0AA0000000000000000B9 /* AnswerPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F9 /* AnswerPipeline.swift */; };
 		0BF0AA0000000000000000BA /* AVSpeechTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000FA /* AVSpeechTTSEngine.swift */; };
@@ -159,6 +164,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAudioPipeline.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000204 /* UtteranceTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceTranscriber.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFSpeechWakeWordSpotter.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000208 /* VoiceSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionController.swift; sourceTree = "<group>"; };
+		0BF0AA00000000000000020A /* VoiceSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionView.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F8 /* SenseProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SenseProvider.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F9 /* AnswerPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPipeline.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000FA /* AVSpeechTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVSpeechTTSEngine.swift; sourceTree = "<group>"; };
@@ -309,6 +319,7 @@
 		0BF0AA0000000000000000A4 /* Session */ = {
 			isa = PBXGroup;
 			children = (
+				0BF0AA00000000000000020A /* VoiceSessionView.swift */,
 				0BF0AA0000000000000000FB /* AnswerHarnessView.swift */,
 			);
 			name = Session;
@@ -473,6 +484,10 @@
 		0BF0AA0000000000000000A3 /* Voice */ = {
 			isa = PBXGroup;
 			children = (
+				0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */,
+				0BF0AA000000000000000204 /* UtteranceTranscriber.swift */,
+				0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */,
+				0BF0AA000000000000000208 /* VoiceSessionController.swift */,
 				0BF0AA0000000000000000F7 /* WakeWordSpotting.swift */,
 			);
 			name = Voice;
@@ -731,6 +746,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */,
+				0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */,
+				0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */,
+				0BF0AA000000000000000207 /* VoiceSessionController.swift in Sources */,
+				0BF0AA000000000000000209 /* VoiceSessionView.swift in Sources */,
 				0BF0AA0000000000000000B8 /* SenseProvider.swift in Sources */,
 				0BF0AA0000000000000000B9 /* AnswerPipeline.swift in Sources */,
 				0BF0AA0000000000000000BA /* AVSpeechTTSEngine.swift in Sources */,

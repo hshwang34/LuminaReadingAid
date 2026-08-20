@@ -62,10 +62,16 @@ final class AnswerPipeline {
 
   // MARK: - Entry point
 
+  /// - Parameter onFirstAudio: called the instant the first clause is handed to the
+  ///   synthesiser. The session UI needs this because generation and speech overlap:
+  ///   by the time this method returns, Luna has usually been talking for a second or
+  ///   more, and a UI that waits for the return value shows "thinking" over audible
+  ///   speech.
   func handle(
     utterance: String,
     context: SessionContext,
-    book: Book? = nil
+    book: Book? = nil,
+    onFirstAudio: (@MainActor () -> Void)? = nil
   ) async throws -> TurnResult {
 
     let started = Date()
@@ -76,26 +82,31 @@ final class AnswerPipeline {
       return try await generateGrounded(
         mode: .define, word: word, utterance: utterance,
         contextSentence: contextSentence, intent: intent,
-        context: context, book: book, started: started
+        context: context, book: book, started: started,
+        onFirstAudio: onFirstAudio
       )
 
     case .exampleSentence(let word):
       return try await generateGrounded(
         mode: .exampleSentence, word: word, utterance: utterance,
         contextSentence: nil, intent: intent,
-        context: context, book: book, started: started
+        context: context, book: book, started: started,
+        onFirstAudio: onFirstAudio
       )
 
     case .pronounce(let word):
       return try await pronounce(word, intent: intent, context: context,
-                                 book: book, started: started)
+                                 book: book, started: started,
+                                 onFirstAudio: onFirstAudio)
 
     case .repeatLast:
-      return await repeatLast(intent: intent, context: context, started: started)
+      return await repeatLast(intent: intent, context: context, started: started,
+                              onFirstAudio: onFirstAudio)
 
     case .followUp(let question):
       return try await generateFollowUp(
-        question: question, intent: intent, context: context, started: started
+        question: question, intent: intent, context: context, started: started,
+        onFirstAudio: onFirstAudio
       )
 
     case .endSession, .unintelligible:
@@ -122,7 +133,8 @@ final class AnswerPipeline {
     intent: SessionIntent,
     context: SessionContext,
     book: Book?,
-    started: Date
+    started: Date,
+    onFirstAudio: (@MainActor () -> Void)?
   ) async throws -> TurnResult {
 
     let existing = try? persistence.fetch(word)
@@ -145,7 +157,10 @@ final class AnswerPipeline {
     for try await event in engine.generate(prompt) {
       switch event {
       case .speakable(let clause):
-        if firstAudio == nil { firstAudio = Date() }
+        if firstAudio == nil {
+          firstAudio = Date()
+          onFirstAudio?()
+        }
         tts.enqueue(clause)
         spoken.append(clause)
 
@@ -192,7 +207,8 @@ final class AnswerPipeline {
     question: String,
     intent: SessionIntent,
     context: SessionContext,
-    started: Date
+    started: Date,
+    onFirstAudio: (@MainActor () -> Void)?
   ) async throws -> TurnResult {
 
     let prompt = AnswerPrompt(
@@ -210,7 +226,10 @@ final class AnswerPipeline {
     for try await event in engine.generate(prompt) {
       switch event {
       case .speakable(let clause):
-        if firstAudio == nil { firstAudio = Date() }
+        if firstAudio == nil {
+          firstAudio = Date()
+          onFirstAudio?()
+        }
         tts.enqueue(clause)
         spoken.append(clause)
       case .field:
@@ -242,13 +261,15 @@ final class AnswerPipeline {
     intent: SessionIntent,
     context: SessionContext,
     book: Book?,
-    started: Date
+    started: Date,
+    onFirstAudio: (@MainActor () -> Void)?
   ) async throws -> TurnResult {
 
     let existing = try? persistence.fetch(word)
     let senses = await senseProvider.senses(for: word, existingDefinition: existing?.definition)
 
     let firstAudio = Date()
+    onFirstAudio?()
     await tts.speakWordSlowly(word)
 
     // Asking how to say a word is still asking about it — file it.
@@ -272,12 +293,16 @@ final class AnswerPipeline {
   private func repeatLast(
     intent: SessionIntent,
     context: SessionContext,
-    started: Date
+    started: Date,
+    onFirstAudio: (@MainActor () -> Void)?
   ) async -> TurnResult {
 
     let text = context.priorTurns.last(where: { $0.role == .assistant })?.content ?? ""
     let firstAudio: Date? = text.isEmpty ? nil : Date()
-    if !text.isEmpty { tts.enqueue(text) }
+    if !text.isEmpty {
+      onFirstAudio?()
+      tts.enqueue(text)
+    }
 
     return TurnResult(
       intent: intent, answer: nil, followUp: nil, spokenText: text,

@@ -9,6 +9,7 @@ struct LibraryView: View {
   @State private var showAddBook = false
   @State private var showStreaming = false
   @State private var showPhoneCameraStreaming = false
+  @State private var showVoiceSession = false
 
   var body: some View {
     ScrollView {
@@ -57,7 +58,7 @@ struct LibraryView: View {
             Text("No books yet")
               .font(.sectionTitle)
               .foregroundStyle(.leather)
-            Text("Start a reading session with your glasses to automatically detect books, or add one manually.")
+            Text("Start a voice session and ask Luna about words as you read, or add a book manually.")
               .font(.subheadline)
               .foregroundStyle(.leather.opacity(0.6))
               .multilineTextAlignment(.center)
@@ -67,9 +68,31 @@ struct LibraryView: View {
           .padding(.horizontal, Spacing.xxl)
         }
 
-        // Connect Glasses / Phone Camera
+        // Start a voice session — the app's primary action. Works with no book bound;
+        // the session is linked to one at the end if it wasn't at the start.
         Divider()
           .padding(.horizontal, Spacing.lg)
+
+        Button {
+          showVoiceSession = true
+        } label: {
+          HStack {
+            Image(systemName: "waveform.and.mic")
+              .foregroundStyle(.parchment)
+            Text("Start Voice Session")
+              .font(.headline)
+              .foregroundStyle(.parchment)
+            Spacer()
+            Image(systemName: "chevron.right")
+              .font(.caption)
+              .foregroundStyle(.parchment.opacity(0.7))
+          }
+          .padding(Spacing.lg)
+          .background(.ink, in: RoundedRectangle(cornerRadius: CornerRadius.card))
+          .warmShadow()
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, Spacing.lg)
 
         Button {
           if wearablesVM.registrationState == .registered || wearablesVM.hasMockDevice {
@@ -151,6 +174,9 @@ struct LibraryView: View {
     }
     .sheet(isPresented: $showAddBook) {
       AddBookView()
+    }
+    .fullScreenCover(isPresented: $showVoiceSession) {
+      VoiceSessionView(book: nil)
     }
     .fullScreenCover(isPresented: $showStreaming) {
       StreamSessionView(wearables: wearables, wearablesVM: wearablesVM)

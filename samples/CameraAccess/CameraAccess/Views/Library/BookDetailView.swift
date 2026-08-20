@@ -10,6 +10,7 @@ struct BookDetailView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var showStreaming = false
   @State private var showPhoneCameraStreaming = false
+  @State private var showVoiceSession = false
   @State private var showDeleteConfirm = false
 
   // MARK: - Derived stats
@@ -85,6 +86,9 @@ struct BookDetailView: View {
     } message: {
       Text("This removes the book, its \(book.words.count) word\(book.words.count == 1 ? "" : "s"), \(book.passages.count) quote\(book.passages.count == 1 ? "" : "s"), and all reading sessions. The next time this book is detected, identification runs from scratch.")
     }
+    .fullScreenCover(isPresented: $showVoiceSession) {
+      VoiceSessionView(book: book)
+    }
     .fullScreenCover(isPresented: $showStreaming) {
       StreamSessionView(wearables: wearables, wearablesVM: wearablesVM, book: book)
     }
@@ -148,14 +152,27 @@ struct BookDetailView: View {
 
   private var ctaButtons: some View {
     VStack(spacing: Spacing.md) {
+      // Starting from the book binds every word captured in the session to it, which
+      // is the whole point of a book-centric library — no linking step afterwards.
+      Button {
+        showVoiceSession = true
+      } label: {
+        Label("Start Voice Session", systemImage: "waveform.and.mic")
+          .frame(maxWidth: .infinity)
+          .padding(Spacing.lg)
+          .background(.ink, in: RoundedRectangle(cornerRadius: CornerRadius.button))
+          .foregroundStyle(.parchment)
+          .font(.headline)
+      }
+
       Button {
         showStreaming = true
       } label: {
         Label("Start Reading Session", systemImage: "eyeglasses")
           .frame(maxWidth: .infinity)
           .padding(Spacing.lg)
-          .background(.ink, in: RoundedRectangle(cornerRadius: CornerRadius.button))
-          .foregroundStyle(.parchment)
+          .background(.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: CornerRadius.button))
+          .foregroundStyle(.ink)
           .font(.headline)
       }
 

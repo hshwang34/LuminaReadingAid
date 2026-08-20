@@ -185,6 +185,48 @@ struct IntentRouter: IntentRouting {
   // MARK: Extraction helpers
 
   /// Normalises an utterance for matching without destroying its casing.
+  /// The word a partial utterance is probably heading toward, or nil.
+  ///
+  /// Used to start the dictionary lookup while the reader is still talking, so that by
+  /// the time they stop the definition is already in memory and a network round trip
+  /// has left the part of the latency budget they actually feel.
+  ///
+  /// Deliberately *not* the routing table. Routing waits for a complete sentence —
+  /// "what does precision mean" only matches once "mean" arrives, by which point the
+  /// reader has essentially finished and the head start is gone. These patterns fire
+  /// on the lead-in instead, a second or two earlier, and accept being wrong more
+  /// often: the cost of a bad guess is one cache entry nobody reads.
+  static func likelyTargetWord(in partial: String) -> String? {
+    let text = clean(partial)
+    guard !text.isEmpty else { return nil }
+
+    for rule in prefetchRules {
+      guard let match = text.firstMatch(of: rule),
+            match.count > 1,
+            let captured = match[1].substring else { continue }
+      guard let word = extractWord(from: String(captured)), !isAnaphoric(word) else { continue }
+      return word
+    }
+    return nil
+  }
+
+  /// Lead-in shapes, matched against an incomplete transcript. Each captures the first
+  /// plausible word after a phrase that only ever precedes a lookup.
+  private static let prefetchRules: [Regex<AnyRegexOutput>] = {
+    func rx(_ pattern: String) -> Regex<AnyRegexOutput> {
+      try! Regex(pattern).ignoresCase()
+    }
+    return [
+      rx(#"\bwhat does (?:the word )?([\p{L}][\p{L}'’\-]+)"#),
+      rx(#"\b(?:meaning|definition) of (?:the word )?([\p{L}][\p{L}'’\-]+)"#),
+      rx(#"\bdefine (?:the word )?([\p{L}][\p{L}'’\-]+)"#),
+      rx(#"\bpronounce (?:the word )?([\p{L}][\p{L}'’\-]+)"#),
+      rx(#"\bhow(?:'s| is) ([\p{L}][\p{L}'’\-]+) pronounced"#),
+      rx(#"\buse (?:the word )?([\p{L}][\p{L}'’\-]+)"#),
+      rx(#"\bwhat(?:'s| is) (?:an?|the word) ([\p{L}][\p{L}'’\-]+)"#),
+    ]
+  }()
+
   static func clean(_ utterance: String) -> String {
     utterance
       .trimmingCharacters(in: .whitespacesAndNewlines)

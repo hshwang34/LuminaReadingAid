@@ -207,6 +207,40 @@ final class IntentRouterTests: XCTestCase {
     XCTAssertNil(IntentRouter.extractWord(from: "123"))
     XCTAssertNil(IntentRouter.extractWord(from: ""))
   }
+
+  // MARK: - Speculative prefetch
+  //
+  // These run against *incomplete* sentences, because that is the only time the
+  // result is useful: the dictionary lookup has to start while the reader is still
+  // speaking for it to be free by the time they stop.
+
+  func testLikelyTargetWordFiresBeforeTheSentenceIsFinished() {
+    // The point of these is the word arriving early. Each string here is what the
+    // recogniser has produced partway through the reader's question, not after it.
+    XCTAssertEqual(IntentRouter.likelyTargetWord(in: "what does precision"), "precision")
+    XCTAssertEqual(IntentRouter.likelyTargetWord(in: "how do you pronounce ephemeral"), "ephemeral")
+    XCTAssertEqual(IntentRouter.likelyTargetWord(in: "use divine"), "divine")
+    XCTAssertEqual(IntentRouter.likelyTargetWord(in: "what's the definition of perfunctory"), "perfunctory")
+    XCTAssertEqual(IntentRouter.likelyTargetWord(in: "define ephemeral"), "ephemeral")
+  }
+
+  func testLikelyTargetWordStillWorksOnCompletedSentences() {
+    XCTAssertEqual(IntentRouter.likelyTargetWord(in: "what does precision mean?"), "precision")
+    XCTAssertEqual(
+      IntentRouter.likelyTargetWord(in: "what does divine mean in she divines her way"),
+      "divine"
+    )
+  }
+
+  func testLikelyTargetWordReturnsNilRatherThanGuessing() {
+    // A wrong guess only costs a cache entry nobody reads, but prefetching on
+    // anaphora would fire a lookup for the literal word "it" on every follow-up.
+    XCTAssertNil(IntentRouter.likelyTargetWord(in: "what does it mean"))
+    XCTAssertNil(IntentRouter.likelyTargetWord(in: "use it in a sentence"))
+    XCTAssertNil(IntentRouter.likelyTargetWord(in: "what"))
+    XCTAssertNil(IntentRouter.likelyTargetWord(in: "say that again"))
+    XCTAssertNil(IntentRouter.likelyTargetWord(in: ""))
+  }
 }
 
 // MARK: - Helpers

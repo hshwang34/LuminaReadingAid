@@ -30,11 +30,23 @@ struct WakeEvent: Sendable, Equatable {
   }
 }
 
+/// Isolated to the main actor because every implementation is driven by the session,
+/// which lives there; a nonisolated protocol would force each conformance to hop.
+@MainActor
 protocol WakeWordSpotting: AnyObject {
   /// Begin duty-cycled scanning. The stream yields one event per detection and
   /// finishes when `stopSpotting()` is called.
   func startSpotting() -> AsyncStream<WakeEvent>
   func stopSpotting()
+
+  /// The text following the wake phrase in `transcript`, or nil when the phrase isn't
+  /// there at all.
+  ///
+  /// Exists because a recogniser rewrites its own partials: "hey luna what does" can
+  /// become "Hey Luna, what does" a moment later, moving every character after the
+  /// wake phrase. Re-deriving the trailing text from the current transcript is
+  /// therefore more reliable than remembering an offset from when the wake fired.
+  func trailingUtterance(in transcript: String) -> String?
 }
 
 // MARK: - Matcher
