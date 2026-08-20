@@ -249,7 +249,11 @@ struct AnswerHarnessView: View {
   /// session's ability to keep listening.
   private func configureAudioSessionOnce() {
     let session = AVAudioSession.sharedInstance()
-    guard session.category != .playback else { return }
+    // Leave a recording-capable category alone. A voice session configures
+    // `.playAndRecord` once and depends on it staying that way; downgrading it to
+    // `.playback` because the debug tab happened to appear would take the microphone
+    // away from a session that is still listening.
+    guard session.category != .playback, session.category != .playAndRecord else { return }
     try? session.setCategory(.playback, mode: .spokenAudio)
     try? session.setActive(true)
   }
