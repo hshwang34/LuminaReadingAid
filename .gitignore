@@ -11,3 +11,7 @@ xcuserdata/
 # Build artifacts
 DerivedData/
 build/
+
+# Timestamped project.pbxproj backups taken before scripted edits.
+# Git history is the real safety net once a change is committed.
+*.pbxproj.backup-*

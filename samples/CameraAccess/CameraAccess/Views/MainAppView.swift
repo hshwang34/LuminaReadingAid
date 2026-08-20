@@ -29,11 +29,11 @@ struct MainAppView: View {
 
   var body: some View {
     Group {
-      if viewModel.registrationState == .registered || viewModel.hasMockDevice {
-        RootTabView(wearables: wearables, wearablesVM: viewModel)
-      } else {
-        HomeScreenView(viewModel: viewModel)
-      }
+      // Voice-first pivot: the app is a standalone phone app, so the tab tree is
+      // always reachable. Glasses registration is no longer an entry requirement —
+      // HomeScreenView and the DAT registration flow remain only until the legacy
+      // glasses code is deleted.
+      RootTabView(wearables: wearables, wearablesVM: viewModel)
     }
     .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
       OnboardingCoordinatorView(wearablesViewModel: viewModel) {

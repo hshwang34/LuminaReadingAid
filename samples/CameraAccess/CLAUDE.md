@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CameraAccess is the main iOS app (bundle: `com.Lumina.ReadingAid`) for LuminaReading — a vocabulary learning app for international students reading English books. Users capture words/passages while reading, enrich them with dictionary lookups, and retain them through spaced repetition, all organized around a book library.
 
-- **Platform**: iOS 17.0+, Swift, SwiftUI, MVVM (`@MainActor` ViewModels, `ObservableObject`)
+- **Platform**: iOS 18.0+, Swift, SwiftUI, MVVM (`@MainActor` ViewModels, `ObservableObject`)
 - **Target**: App Store release as a standalone phone app
 
 ## Direction: Mobile-First, Voice-First (August 2026 pivot)
@@ -62,11 +62,11 @@ Relationships: Book → many CapturedWords, Book → many ReadingSessions (casca
 
 ## File Organization
 
-Older services/models live at the root of `CameraAccess/` (e.g. `WordCaptureService`, `CapturedWord`, `CapturedPassage`); newer code is organized into `Services/`, `Models/`, `Views/`, `ViewModels/`. **The root-level copy is always the one in the Xcode target** — when both exist, edit the root-level file. Part of the refactor is consolidating everything into the subdirectories (via Xcode, not pbxproj edits).
+Older services/models live at the root of `CameraAccess/` (e.g. `WordCaptureService`, `CapturedWord`, `CapturedPassage`); newer code is organized into `Services/`, `Models/`, `Views/`, `ViewModels/`. **The root-level copy is always the one in the Xcode target** — when both exist, edit the root-level file. Part of the refactor is consolidating everything into the subdirectories; Claude does this directly, moving the file and updating `project.pbxproj` (see Project File Ownership below).
 
-### Known project-file issues (fix in Xcode, flag to user)
+### Known project-file issues
 
-- `project.pbxproj` contains two file references to `SelectionOverlayView.swift` (both pointing at the root-level file, both in Sources). Remove the duplicate when the legacy gesture code is deleted.
+- `project.pbxproj` contains two file references to `SelectionOverlayView.swift` (both pointing at the root-level file, both in Sources). Claude should remove the duplicate when the legacy gesture code is deleted.
 
 ## Conventions
 
@@ -84,8 +84,30 @@ When entering plan mode, be thorough before writing any plan:
 - **Present trade-offs explicitly** with a clear recommendation.
 - On re-entering plan mode, overwrite the plan file with only the new task — never append old plans.
 
-## Implementation Phase: Xcode Delegation
+## Implementation Phase: Project File Ownership
 
-When an implementation step requires Xcode GUI actions — **stop and ask the user to do it manually.** Do not brute-force `.pbxproj` edits.
+**Claude owns `project.pbxproj` and may edit it directly.** Do not stop and ask the user to click through Xcode for routine project changes — make the edit, validate it, and tell them what changed.
 
-Delegate: adding/removing files from targets, SPM dependencies, build settings, signing/capabilities, frameworks, build phases, schemes, new targets, background modes.
+This covers: adding/removing files from targets, creating groups, build settings (including deployment target), `Info.plist` keys and background modes, entitlements files, build phases, schemes, SPM package references, and new targets (widget/app extensions).
+
+### Required safety protocol
+
+Every `project.pbxproj` edit must follow these steps. The format is unforgiving and a bad edit makes the project unopenable.
+
+1. **Back up first**: `cp project.pbxproj project.pbxproj.backup-$(date +%Y%m%d-%H%M%S)` and tell the user the filename.
+2. **Read before writing** — match the file's existing conventions. Note that this project is `objectVersion = 70` (Xcode 16) and *mixes two styles*:
+   - `CameraAccessTests` is a `PBXFileSystemSynchronizedRootGroup`, so **files added under `CameraAccessTests/` need no project edit at all** — they are compiled automatically. Its `PBXSourcesBuildPhase` is intentionally empty; do not add entries to it.
+   - The `CameraAccess` app target uses explicit refs. A new file needs four entries: `PBXFileReference`, `PBXBuildFile`, membership in a `PBXGroup`, and an entry in the app's `PBXSourcesBuildPhase` (id `AAAAAAAAAAAAAAAAAAAAAA`).
+   - A `Services/` subdirectory becomes a `PBXGroup` with `name = X; path = Services/X;` parented to the main `CameraAccess` group (id `8FD96B7D2E6F0A9800F56AB1`) — follow the `BookIdentification` precedent.
+3. **Use a script, not hand-editing** — generate unique 24-hex-char object IDs and assert they don't already exist in the file.
+4. **Validate afterwards**, always:
+   - `plutil -lint project.pbxproj` (pbxproj is an old-style ASCII plist; `plutil` reads it, Python's `plistlib` does not)
+   - `plutil -convert xml1 -o /tmp/pbx.xml project.pbxproj`, then parse with `plistlib` and assert: every new file resolves into the intended target's sources phase, every new group is parented, and every referenced source path exists on disk.
+
+### Still requires the user
+
+Only these — ask, don't attempt:
+
+- **Apple Developer portal actions**: App Group creation, Push/iCloud capability provisioning, signing certificates and profiles.
+- **SPM package resolution**: a package reference can be written into the project, but Xcode must fetch and resolve it on next open. Say so, and expect a resolution step before the build works.
+- **Anything requiring a build to verify** — see Build & Test above; Claude never runs `xcodebuild`.
