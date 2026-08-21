@@ -35,6 +35,11 @@ import UserNotifications
 @Observable
 final class VoiceSessionController {
 
+  /// The running session, if any — how the Live Activity's End intent (which
+  /// performs in this process but far from the view tree) reaches the session.
+  /// Weak: the registry must never keep a dismissed session alive.
+  private(set) static weak var active: VoiceSessionController?
+
   // MARK: - Phase
 
   enum Phase: Equatable {
@@ -89,6 +94,7 @@ final class VoiceSessionController {
       guard oldValue != phase else { return }
       // The one line that reconstructs any session bug: every transition, in order.
       Log.session.info("phase \(String(describing: oldValue), privacy: .public) → \(String(describing: self.phase), privacy: .public)")
+      updateLiveActivity()
     }
   }
   /// What the reader is saying right now, wake phrase stripped.
@@ -132,6 +138,8 @@ final class VoiceSessionController {
 
   private var silenceTimer: Task<Void, Never>?
   private var windowTimer: Task<Void, Never>?
+
+  private let liveActivity = VoiceSessionActivityManager()
 
   /// Set when the session ended in the background, where deactivating the audio
   /// session is forbidden. Settled on the next foregrounding.
@@ -198,6 +206,8 @@ final class VoiceSessionController {
 
     UIApplication.shared.isIdleTimerDisabled = true
     registerForegroundObserver()
+    Self.active = self
+    liveActivity.start(bookTitle: book?.title, startedAt: session.startedAt)
 
     // Listening starts immediately; the model loads behind it. A reader who starts a
     // session and speaks within a second should not be told to wait for a download
@@ -241,6 +251,8 @@ final class VoiceSessionController {
       removeForegroundObserver()
     }
     clearPausedNotification()
+    liveActivity.end(wordCount: sessionWords.count)
+    if Self.active === self { Self.active = nil }
     phase = .ended(reason)
   }
 
@@ -601,6 +613,28 @@ final class VoiceSessionController {
     case .voiceBegan, .voiceEnded:
       break
     }
+  }
+
+  // MARK: - Live Activity
+
+  /// Coarse phase → activity state. Thinking and responding both read as
+  /// "answering" from a locked phone; the states a reader can act on are
+  /// listening and paused.
+  private func updateLiveActivity() {
+    let label: String
+    var paused = false
+    switch phase {
+    case .idle, .startingUp: label = "Starting"
+    case .listeningIdle, .coolingDown: label = "Listening"
+    case .awaitingQuestion, .capturingUtterance: label = "Listening"
+    case .thinking: label = "Thinking"
+    case .responding: label = "Speaking"
+    case .paused:
+      label = "Paused"
+      paused = true
+    case .ended: return  // end() renders the summary itself
+    }
+    liveActivity.update(phaseLabel: label, wordCount: sessionWords.count, isPaused: paused)
   }
 
   // MARK: - Foreground recovery

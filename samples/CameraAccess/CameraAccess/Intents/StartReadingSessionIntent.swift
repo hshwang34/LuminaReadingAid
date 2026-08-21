@@ -27,13 +27,26 @@ struct StartReadingSessionIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult {
+    #if LUMINA_WIDGET_EXTENSION
+    // A Control's intent performs in the WIDGET process, where the app's launch
+    // router doesn't exist — setting a flag here would set it in the wrong process.
+    // Handing back an OpenURLIntent routes the request through the app's
+    // .onOpenURL, the same door the widget tile uses.
+    return .result(opensIntent: OpenURLIntent(URL(string: "luminareading://voice-session")!))
+    #else
+    // From Shortcuts, Spotlight, or the Action Button the intent performs in the
+    // app itself, so the router is the direct path.
     SessionLaunchRouter.shared.requestSession()
     return .result()
+    #endif
   }
 }
 
+#if !LUMINA_WIDGET_EXTENSION
 /// Registers the phrase-less shortcut so the intent shows up pre-made in the
 /// Shortcuts app and in Spotlight without the reader building anything.
+/// App target only — a second registration from the widget process would be
+/// a duplicate provider.
 struct LuminaShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(
@@ -47,3 +60,4 @@ struct LuminaShortcuts: AppShortcutsProvider {
     )
   }
 }
+#endif

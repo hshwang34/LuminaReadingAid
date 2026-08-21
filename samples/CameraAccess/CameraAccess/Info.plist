@@ -64,6 +64,8 @@
 	<string>This app needs access to save photos captured from your glasses.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Used to transcribe spoken questions about captured words.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

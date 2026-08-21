@@ -1,0 +1,24 @@
+{
+  "originHash" : "8a4c3e0d607b2fa184dae7e655c7b90e3d41a1e07650f7849d46eac18b18c40a",
+  "pins" : [
+    {
+      "identity" : "llama.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattt/llama.swift",
+      "state" : {
+        "revision" : "4890f02f68b68c5fe548721e0b269f6955318645",
+        "version" : "2.10520.0"
+      }
+    },
+    {
+      "identity" : "meta-wearables-dat-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/facebook/meta-wearables-dat-ios",
+      "state" : {
+        "revision" : "2ea30fa228359315baf71c404aec821472e994c1",
+        "version" : "0.5.0"
+      }
+    }
+  ],
+  "version" : 3
+}
