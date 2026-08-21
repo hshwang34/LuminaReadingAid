@@ -25,7 +25,8 @@ struct AnswerHarnessView: View {
 
   @State private var utterance = "what does ephemeral mean"
   @State private var pipeline: AnswerPipeline?
-  @State private var tts = AVSpeechTTSEngine()
+  @State private var tts: TTSEngine = AVSpeechTTSEngine()
+  @State private var useKokoro = false
   @State private var context = SessionContext()
 
   @State private var readiness: AnswerEngineReadiness = .notReady
@@ -106,6 +107,36 @@ struct AnswerHarnessView: View {
       }
 
       placementControl
+      voiceControl
+    }
+  }
+
+  /// System voice vs Kokoro, A/B on device — the only place the two can be
+  /// compared with the same clauses.
+  private var voiceControl: some View {
+    VStack(alignment: .leading, spacing: Spacing.xs) {
+      Picker("Voice", selection: $useKokoro) {
+        Text("System voice").tag(false)
+        Text("Kokoro").tag(true)
+      }
+      .pickerStyle(.segmented)
+
+      Text(useKokoro
+           ? "Neural voice; downloads its model on first use, falls back until warm."
+           : "AVSpeechSynthesizer — instant, plainly synthetic.")
+        .font(.caption2)
+        .foregroundStyle(.leather)
+    }
+    .onChange(of: useKokoro) { _, wantsKokoro in
+      tts.stop()
+      if wantsKokoro {
+        let engine = KokoroTTSEngine()
+        tts = engine
+        Task { await engine.prepare() }
+      } else {
+        tts = AVSpeechTTSEngine()
+      }
+      pipeline = nil  // next Ask rebuilds against the new engine
     }
   }
 

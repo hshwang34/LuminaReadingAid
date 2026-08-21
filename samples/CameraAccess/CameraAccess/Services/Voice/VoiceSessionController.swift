@@ -172,7 +172,9 @@ final class VoiceSessionController {
   ) {
     let pipeline = VoiceAudioPipeline()
     let transcriber = UtteranceTranscriber(pipeline: pipeline)
-    let tts = tts ?? AVSpeechTTSEngine()
+    // Kokoro with the system voice inside it as a per-clause fallback: sessions
+    // speak immediately and start sounding better the moment the model is warm.
+    let tts = tts ?? KokoroTTSEngine()
 
     self.modelContext = modelContext
     self.pipeline = pipeline
@@ -217,6 +219,12 @@ final class VoiceSessionController {
     registerForegroundObserver()
     Self.active = self
     liveActivity.start(bookTitle: book?.title, startedAt: session.startedAt)
+
+    // The voice warms behind the session too — same reasoning as the LLM below:
+    // nothing the reader is waiting on, so no reason to make them wait.
+    if let kokoro = tts as? KokoroTTSEngine {
+      Task { await kokoro.prepare() }
+    }
 
     // Listening starts immediately; the model loads behind it. A reader who starts a
     // session and speaks within a second should not be told to wait for a download

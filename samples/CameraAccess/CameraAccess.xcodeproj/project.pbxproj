@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BF0AA000000000000000603 /* KokoroTTS in Frameworks */ = {isa = PBXBuildFile; productRef = 0BF0AA000000000000000602 /* KokoroTTS */; };
+		0BF0AA000000000000000605 /* KokoroTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000604 /* KokoroTTSEngine.swift */; };
 		0BF0AA000000000000000510 /* LuminaWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA00000000000000050F /* LuminaWidgetsBundle.swift */; };
 		0BF0AA000000000000000512 /* VoiceSessionLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000511 /* VoiceSessionLiveActivity.swift */; };
 		0BF0AA000000000000000514 /* StartSessionControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000513 /* StartSessionControl.swift */; };
@@ -193,6 +195,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0BF0AA000000000000000604 /* KokoroTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroTTSEngine.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000508 /* LuminaWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LuminaWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0BF0AA00000000000000050F /* LuminaWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LuminaWidgetsBundle.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000511 /* VoiceSessionLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionLiveActivity.swift; sourceTree = "<group>"; };
@@ -351,6 +354,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BF0AA000000000000000603 /* KokoroTTS in Frameworks */,
 				0BF0AA0000000000000000C3 /* LlamaSwift in Frameworks */,
 				8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */,
 				8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */,
@@ -540,6 +544,7 @@
 		0BF0AA0000000000000000A2 /* TTS */ = {
 			isa = PBXGroup;
 			children = (
+				0BF0AA000000000000000604 /* KokoroTTSEngine.swift */,
 				0BF0AA0000000000000000FA /* AVSpeechTTSEngine.swift */,
 				0BF0AA0000000000000000F6 /* TTSEngine.swift */,
 			);
@@ -810,6 +815,7 @@
 			);
 			mainGroup = 5A5A5A5A5A5A5A5A5A5A5A5A;
 			packageReferences = (
+				0BF0AA000000000000000601 /* XCRemoteSwiftPackageReference "speech-swift" */,
 				0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */,
 				95F7F3332DEF0D91006D1C1A /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
 			);
@@ -868,6 +874,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BF0AA000000000000000605 /* KokoroTTSEngine.swift in Sources */,
 				0BF0AA000000000000000519 /* VoiceSessionActivityAttributes.swift in Sources */,
 				0BF0AA00000000000000051C /* VoiceSessionControlIntents.swift in Sources */,
 				0BF0AA000000000000000520 /* VoiceSessionActivityManager.swift in Sources */,
@@ -1357,6 +1364,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		0BF0AA000000000000000601 /* XCRemoteSwiftPackageReference "speech-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soniqo/speech-swift";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mattt/llama.swift";
@@ -1376,6 +1391,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0BF0AA000000000000000602 /* KokoroTTS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0BF0AA000000000000000601 /* XCRemoteSwiftPackageReference "speech-swift" */;
+			productName = KokoroTTS;
+		};
 		0BF0AA0000000000000000C2 /* LlamaSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */;
