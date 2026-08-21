@@ -33,7 +33,7 @@ struct PracticeTabView: View {
             .font(.title2)
             .foregroundStyle(.amber)
           Text("\(words.count) words captured")
-            .font(.serif(.headline, weight: .semibold))
+            .font(.headline)
             .foregroundStyle(.ink)
           Text("\(dueForReview) due for review")
             .font(.subheadline)
@@ -124,7 +124,7 @@ struct PracticeTabView: View {
 
         VStack(alignment: .leading, spacing: Spacing.xs) {
           Text(title)
-            .font(.serif(.headline, weight: .semibold))
+            .font(.headline)
             .foregroundStyle(.ink)
           Text(subtitle)
             .font(.subheadline)

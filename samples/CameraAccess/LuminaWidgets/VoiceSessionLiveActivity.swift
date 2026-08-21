@@ -10,6 +10,7 @@
 
 import ActivityKit
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct VoiceSessionLiveActivity: Widget {
@@ -112,11 +113,25 @@ private struct LockScreenView: View {
 
 // MARK: - Palette
 
-/// Pen & Paper, reduced to what the lock screen needs.
+/// Notebook Minimal, reduced to what the lock screen needs. Mirrors the app's
+/// DesignSystem values (the widget target doesn't compile DesignSystem.swift);
+/// dynamic so widgets and the Live Activity are legible in both appearances.
 enum Palette {
-  static let parchment = Color(red: 247/255, green: 243/255, blue: 237/255)
-  static let ink = Color(red: 61/255, green: 46/255, blue: 31/255)
-  static let leather = Color(red: 122/255, green: 92/255, blue: 62/255)
-  static let amber = Color(red: 196/255, green: 149/255, blue: 106/255)
-  static let brick = Color(red: 184/255, green: 92/255, blue: 74/255)
+  private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color {
+    func component(_ hex: UInt32, _ shift: UInt32) -> CGFloat {
+      CGFloat((hex >> shift) & 0xFF) / 255
+    }
+    return Color(uiColor: UIColor { trait in
+      let hex = trait.userInterfaceStyle == .dark ? dark : light
+      return UIColor(
+        red: component(hex, 16), green: component(hex, 8), blue: component(hex, 0), alpha: 1)
+    })
+  }
+
+  static let parchment = dynamic(0xFAF9F7, 0x141312)
+  static let linen = dynamic(0xF1EFEC, 0x211F1D)
+  static let ink = dynamic(0x1C1B1A, 0xF2F1EF)
+  static let leather = dynamic(0x6B6560, 0xA8A19A)
+  static let amber = dynamic(0xCC8A3D, 0xE0A155)
+  static let brick = dynamic(0xD65F4C, 0xE8836F)
 }

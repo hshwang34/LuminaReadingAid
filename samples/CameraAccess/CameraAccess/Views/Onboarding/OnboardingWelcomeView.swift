@@ -20,7 +20,7 @@ struct OnboardingWelcomeView: View {
 
       VStack(spacing: Spacing.md) {
         Text("Words worth keeping.")
-          .font(.serif(.largeTitle, weight: .bold))
+          .font(.display)
           .foregroundColor(.ink)
           .multilineTextAlignment(.center)
 

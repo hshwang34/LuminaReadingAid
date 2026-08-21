@@ -22,7 +22,7 @@ struct StatCardView: View {
           .lineLimit(1)
       }
       Text(value)
-        .font(.serif(.title2, weight: .bold))
+        .font(.stat(22))
         .foregroundStyle(.ink)
       if let secondary {
         Text(secondary)

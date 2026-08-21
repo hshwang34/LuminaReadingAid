@@ -287,7 +287,7 @@ private struct StatTile: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.xs) {
       Text(value)
-        .font(.serif(.title2, weight: .bold))
+        .font(.title2.bold())
         .foregroundStyle(.ink)
         .lineLimit(1)
         .minimumScaleFactor(0.7)
@@ -354,7 +354,7 @@ private struct BookWordRow: View {
       }
     }
     .padding(Spacing.lg)
-    .background(.white.opacity(0.6), in: RoundedRectangle(cornerRadius: CornerRadius.card))
+    .background(.linen, in: RoundedRectangle(cornerRadius: CornerRadius.card))
     .warmShadow()
   }
 }

@@ -126,7 +126,7 @@ struct ProfileTabView: View {
         .font(.footnote)
         .foregroundStyle(.amber)
       Text(value)
-        .font(.serif(.title3, weight: .bold))
+        .font(.stat(20))
         .foregroundStyle(.ink)
       Text(label)
         .font(.caption2)
@@ -279,7 +279,7 @@ struct ProfileTabView: View {
       VStack(alignment: .leading, spacing: 4) {
         HStack {
           Text(book.title)
-            .font(.serif(.headline, weight: .semibold))
+            .font(.headline)
             .foregroundStyle(.ink)
             .lineLimit(2)
           if book.isFinished {
@@ -395,7 +395,7 @@ struct ProfileTabView: View {
   private var footer: some View {
     VStack(spacing: 2) {
       Text("LuminaReading")
-        .font(.serif(.headline, weight: .semibold))
+        .font(.subheadline.weight(.semibold))
         .foregroundStyle(.leather)
       if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
         Text("Version \(version)")
@@ -411,7 +411,7 @@ struct ProfileTabView: View {
 
   private func sectionHeader(_ text: String) -> some View {
     Text(text)
-      .font(.serif(.title3, weight: .semibold))
+      .font(.sectionTitle)
       .foregroundStyle(.ink)
   }
 

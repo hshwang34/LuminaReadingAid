@@ -382,7 +382,7 @@ private struct WordCardRow: View {
       }
     }
     .padding(Spacing.lg)
-    .background(.white.opacity(0.6), in: RoundedRectangle(cornerRadius: CornerRadius.card))
+    .background(.linen, in: RoundedRectangle(cornerRadius: CornerRadius.card))
     .warmShadow()
   }
 }

@@ -14,7 +14,7 @@ struct BookCardView: View {
       BookCoverView(imageData: book.coverImageData, size: style == .large ? .large : .compact)
 
       Text(book.title)
-        .font(style == .large ? .serif(.headline, weight: .semibold) : .subheadline)
+        .font(style == .large ? .headline : .subheadline)
         .foregroundStyle(.ink)
         .lineLimit(2)
 

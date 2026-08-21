@@ -29,7 +29,7 @@ struct QuizResultsView: View {
           .animation(.easeOut(duration: 0.6), value: fillRatio)
         VStack(spacing: Spacing.xs) {
           Text("\(viewModel.score)/\(viewModel.questions.count)")
-            .font(.serif(.title, weight: .bold))
+            .font(.stat(28))
             .foregroundStyle(.ink)
           Text("\(percentage)%")
             .font(.subheadline)

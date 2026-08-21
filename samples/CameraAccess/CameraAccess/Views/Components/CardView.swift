@@ -11,9 +11,9 @@
 //
 // Reusable container component that provides consistent card styling throughout the app.
 //
-// Styled in the Pen & Paper language: linen surface, warm ink-tinted shadow. It
-// predates the design system (systemBackground + black shadow) and was the one
-// surface in the app that still looked like a stock iOS card among paper ones.
+// Notebook Minimal: a flat cloud surface whose edge is a hairline border, not a
+// shadow. The one shared card container — screens that hand-roll their own card
+// backgrounds should migrate to `.hairlineCard()` as they get touched.
 //
 
 import SwiftUI
@@ -29,7 +29,6 @@ struct CardView<Content: View>: View {
     VStack(spacing: 0) {
       content
     }
-    .background(.linen, in: RoundedRectangle(cornerRadius: CornerRadius.card))
-    .warmShadow(.subtle)
+    .hairlineCard()
   }
 }

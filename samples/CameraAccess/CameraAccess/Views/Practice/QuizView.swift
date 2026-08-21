@@ -76,7 +76,7 @@ struct QuizView: View {
         Text(question.style == .wordToDefinition
              ? question.word.text
              : question.word.definition ?? "")
-          .font(question.style == .wordToDefinition ? .display : .serif(.title3, weight: .regular))
+          .font(question.style == .wordToDefinition ? .headword : .system(.title3))
           .foregroundStyle(.ink)
           .multilineTextAlignment(.center)
           .padding(.horizontal, Spacing.lg)

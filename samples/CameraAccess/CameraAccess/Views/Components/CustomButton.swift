@@ -26,18 +26,20 @@ struct CustomButton: View {
     var backgroundColor: Color {
       switch self {
       case .primary:
-        return .ink
+        return .amber
       case .secondary:
-        return .ink.opacity(0.08)
+        return .linen
       case .destructive:
-        return .brick.opacity(0.15)
+        return .brick.opacity(0.12)
       }
     }
 
     var foregroundColor: Color {
       switch self {
       case .primary:
-        return .parchment
+        // White holds on marigold in both light and dark — the accent is the
+        // constant, not the scheme.
+        return .white
       case .secondary:
         return .ink
       case .destructive:
@@ -53,8 +55,11 @@ struct CustomButton: View {
         .foregroundColor(style.foregroundColor)
         .frame(maxWidth: .infinity)
         .frame(height: 56)
-        .background(style.backgroundColor)
-        .cornerRadius(CornerRadius.button)
+        .background(style.backgroundColor, in: RoundedRectangle(cornerRadius: CornerRadius.button))
+        .overlay(
+          RoundedRectangle(cornerRadius: CornerRadius.button)
+            .strokeBorder(.hairline, lineWidth: style == .secondary ? 1 : 0)
+        )
     }
     .disabled(isDisabled)
     .opacity(isDisabled ? 0.6 : 1.0)

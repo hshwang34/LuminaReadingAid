@@ -11,7 +11,7 @@ struct AddBookView: View {
       VStack(spacing: Spacing.xl) {
         VStack(spacing: Spacing.lg) {
           TextField("Book Title", text: $title)
-            .font(.serif(.title3, weight: .semibold))
+            .font(.headline)
             .padding(Spacing.lg)
             .background(.linen, in: RoundedRectangle(cornerRadius: CornerRadius.card))
 

@@ -27,7 +27,7 @@ struct OnboardingNotificationsView: View {
 
       VStack(spacing: Spacing.md) {
         Text("Remember what you meant to learn.")
-          .font(.serif(.title, weight: .bold))
+          .font(.screenTitle)
           .foregroundColor(.ink)
           .multilineTextAlignment(.center)
 
