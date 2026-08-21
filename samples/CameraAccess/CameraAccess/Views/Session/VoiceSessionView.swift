@@ -95,18 +95,14 @@ struct VoiceSessionView: View {
             .padding(.horizontal, Spacing.xl)
         }
 
-        if let answer = controller.lastAnswer {
-          SessionAnswerCard(word: controller.lastWord, answer: answer)
+        if !controller.lastAnswerText.isEmpty {
+          SessionAnswerCard(question: controller.lastQuestion, answer: controller.lastAnswerText)
             .padding(.horizontal, Spacing.lg)
             .transition(.scale(scale: 0.96).combined(with: .opacity))
-        } else if let followUp = controller.lastFollowUp {
-          SessionFollowUpCard(text: followUp.answer)
-            .padding(.horizontal, Spacing.lg)
-            .transition(.opacity)
         }
       }
       .animation(.spring(duration: 0.3), value: controller.phase)
-      .animation(.spring(duration: 0.3), value: controller.lastSpokenText)
+      .animation(.spring(duration: 0.3), value: controller.lastAnswerText)
 
       Spacer(minLength: Spacing.lg)
 
@@ -353,12 +349,14 @@ private struct QuillLine: Shape {
   }
 }
 
-// MARK: - Answer cards
+// MARK: - Answer card
 
+/// Luna's answer, as she spoke it. The model answers in prose, so the card shows
+/// prose — the reader's question in the margin voice, the answer as the body.
 struct SessionAnswerCard: View {
 
-  let word: String
-  let answer: GroundedAnswer
+  let question: String
+  let answer: String
 
   var body: some View {
     HStack(spacing: 0) {
@@ -367,26 +365,16 @@ struct SessionAnswerCard: View {
         .frame(width: 3)
 
       VStack(alignment: .leading, spacing: Spacing.sm) {
-        Text(word)
-          .font(.serif(.title2, weight: .semibold))
-          .foregroundStyle(.ink)
-
-        Text(answer.shortGloss)
-          .font(.body)
-          .foregroundStyle(.ink)
-
-        if !answer.example.isEmpty {
-          Text(answer.example)
-            .font(.subheadline)
+        if !question.isEmpty {
+          Text(question)
+            .font(.caption)
             .italic()
             .foregroundStyle(.leather)
         }
 
-        if answer.confidence == .low {
-          Label("Closest meaning shown", systemImage: "questionmark.circle")
-            .font(.caption)
-            .foregroundStyle(.brick)
-        }
+        Text(answer)
+          .font(.serif(.body))
+          .foregroundStyle(.ink)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Spacing.lg)
@@ -394,20 +382,6 @@ struct SessionAnswerCard: View {
     .background(.linen, in: RoundedRectangle(cornerRadius: CornerRadius.card))
     .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card))
     .warmShadow(.subtle)
-  }
-}
-
-struct SessionFollowUpCard: View {
-  let text: String
-
-  var body: some View {
-    Text(text)
-      .font(.body)
-      .foregroundStyle(.ink)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(Spacing.lg)
-      .background(.linen, in: RoundedRectangle(cornerRadius: CornerRadius.card))
-      .warmShadow(.subtle)
   }
 }
 

@@ -45,8 +45,8 @@ struct AnswerHarnessView: View {
   private let samples = [
     "what does ephemeral mean",
     "what does divine mean in she divines her way",
+    "can you explain what perfunctory means",
     "use it in a sentence",
-    "how do you pronounce ephemeral",
     "say that again",
     "why is it spelled that way",
   ]
@@ -294,7 +294,6 @@ struct AnswerHarnessView: View {
 
   private func lines(for result: AnswerPipeline.TurnResult) -> [Line] {
     var out: [Line] = []
-    out.append(Line(label: "Intent", detail: "\(result.intent)", tone: .normal))
 
     if let ttfa = result.timeToFirstAudio {
       let ms = Int(ttfa * 1000)
@@ -306,32 +305,8 @@ struct AnswerHarnessView: View {
     }
     out.append(Line(label: "Total", detail: "\(Int(result.totalTime * 1000)) ms", tone: .normal))
 
-    if !result.senses.isEmpty {
-      let listed = result.senses.map { $0.promptLine() }.joined(separator: "\n")
-      out.append(Line(label: "Grounding (\(result.senses.count) senses)", detail: listed, tone: .normal))
-    } else {
-      out.append(Line(label: "Grounding", detail: "none — answered ungrounded", tone: .bad))
-    }
-
-    if let answer = result.answer {
-      out.append(Line(
-        label: "Answer (sense \(answer.senseID), \(answer.confidence.rawValue))",
-        detail: "\(answer.shortGloss)\n\(answer.example)",
-        tone: .normal
-      ))
-    }
-    if let followUp = result.followUp {
-      out.append(Line(label: "Follow-up", detail: followUp.answer, tone: .normal))
-    }
     if !result.spokenText.isEmpty {
-      out.append(Line(label: "Spoken", detail: result.spokenText, tone: .normal))
-    }
-    if let word = result.capturedWord {
-      out.append(Line(
-        label: "Saved word",
-        detail: "\(word.text)\n\(word.definition ?? "—")\n\(word.pronunciation ?? "no phonetic")",
-        tone: .good
-      ))
+      out.append(Line(label: "Answer", detail: result.spokenText, tone: .normal))
     }
     return out
   }

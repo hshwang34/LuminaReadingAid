@@ -92,14 +92,11 @@ final class VoiceSessionController {
   /// What the reader is saying right now, wake phrase stripped.
   private(set) var liveTranscript = ""
   private(set) var lastQuestion = ""
-  /// The word the most recent answer was about — the answer payload itself carries a
-  /// sense id and a gloss, but not the word, because the model is never asked to
-  /// repeat back something the app already knows.
-  private(set) var lastWord = ""
-  private(set) var lastAnswer: GroundedAnswer?
-  private(set) var lastFollowUp: FollowUpAnswer?
-  private(set) var lastSpokenText = ""
-  /// Words captured in this session, in the order they were asked about.
+  /// The most recent spoken answer, verbatim — the model answers in prose now, so
+  /// this string IS the answer, not a projection of structured fields.
+  private(set) var lastAnswerText = ""
+  /// Words captured in this session. Empty for now: capture left the answer path in
+  /// the LM-native redesign and returns later as its own step behind the answer.
   private(set) var sessionWords: [String] = []
   private(set) var readiness: AnswerEngineReadiness = .notReady
   /// Non-fatal message worth putting in front of the reader.
@@ -252,7 +249,7 @@ final class VoiceSessionController {
   /// Feed a question directly, bypassing the microphone. Used by the debug harness and
   /// by tests; the spoken path funnels into the same method.
   func ask(_ utterance: String) {
-    runTurn(utterance, deliberate: true)
+    runTurn(utterance)
   }
 
   // MARK: - Model
@@ -408,7 +405,7 @@ final class VoiceSessionController {
         phase = .awaitingQuestion
         armWindow(questionWindow)
       } else {
-        runTurn(question, deliberate: true)
+        runTurn(question)
       }
 
     case .awaitingQuestion:
@@ -420,7 +417,7 @@ final class VoiceSessionController {
         return
       }
       cancelWindow()
-      runTurn(question, deliberate: true)
+      runTurn(question)
 
     case .coolingDown:
       let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -431,7 +428,7 @@ final class VoiceSessionController {
         return
       }
       cancelWindow()
-      runTurn(question, deliberate: false)
+      runTurn(question)
 
     default:
       return
@@ -457,13 +454,17 @@ final class VoiceSessionController {
   /// Whether an utterance is worth a turn, or is half a thought still being formed.
   ///
   /// "Can you?" arrives as its own burst when the reader hesitates longer than the
-  /// energy detector's patience. Routing it produces an apology spoken over the rest
-  /// of their sentence — the right response is to keep listening. Anything the
-  /// deterministic table can already route is a complete question regardless of
-  /// length; beyond that, a fragment under four words is treated as unfinished.
+  /// energy detector's patience, and answering half a thought talks over the rest of
+  /// their sentence — the right response is to keep listening. A tiny keyword check
+  /// stands in for completeness: short utterances that carry a lookup-ish word
+  /// ("define grace") are complete; short ones that don't are a breath, not a
+  /// question. Longer utterances always go to the model.
   private func isCompleteEnoughToAnswer(_ question: String) -> Bool {
-    if IntentRouter.deterministic(question, context: context) != nil { return true }
-    return question.split(separator: " ").count >= 4
+    let tokens = question.lowercased().split(separator: " ")
+    if tokens.count >= 4 { return true }
+    let lookupWords: Set<String> = ["mean", "means", "meaning", "define", "definition",
+                                    "explain", "pronounce", "say", "spell", "word"]
+    return tokens.contains { lookupWords.contains(String($0)) }
   }
 
   /// Warm the dictionary while the reader is still talking.
@@ -478,14 +479,10 @@ final class VoiceSessionController {
 
   // MARK: - Turn
 
-  /// - Parameter deliberate: whether the reader summoned Luna for this turn (wake
-  ///   phrase, or the open question window). Deliberate questions are never answered
-  ///   with silence; fragments picked up during the follow-up window are, because they
-  ///   are usually the room and not the reader.
-  private func runTurn(_ utterance: String, deliberate: Bool) {
+  private func runTurn(_ utterance: String) {
     guard turnTask == nil else { return }
 
-    Log.session.info("turn started — \(deliberate ? "deliberate" : "follow-up window", privacy: .public): \"\(utterance, privacy: .public)\"")
+    Log.session.info("turn started: \"\(utterance, privacy: .public)\"")
     cancelWindow()
     armSilenceTimeout()
     lastQuestion = utterance
@@ -513,37 +510,13 @@ final class VoiceSessionController {
         let result = try await answers.handle(
           utterance: utterance,
           context: context,
-          book: book,
           onFirstAudio: { [weak self] in
             guard let self, self.phase == .thinking else { return }
             self.phase = .responding
           }
         )
-
-        // Two intents come back with nothing to say, and a voice interface must never
-        // let "nothing to say" present as a stall.
-        switch result.intent {
-        case .endSession:
-          phase = .responding
-          tts.enqueue("Ending the session. Good reading.")
-          await tts.finishSpeaking()
-          end(.manual)
-          return
-
-        case .unintelligible where deliberate:
-          // They said the wake phrase and asked something; answering that with silence
-          // reads as broken. Say what went wrong and what shape works.
-          phase = .responding
-          tts.enqueue("Sorry, I didn't catch that. Try asking, what does a word mean.")
-          await tts.finishSpeaking()
-
-        case .unintelligible:
-          break  // a follow-up-window fragment — almost always the room, stay quiet
-
-        default:
-          apply(result)
-          await tts.finishSpeaking()
-        }
+        apply(result)
+        await tts.finishSpeaking()
       } catch is CancellationError {
         Log.session.info("turn cancelled mid-answer")
       } catch {
@@ -557,23 +530,9 @@ final class VoiceSessionController {
 
   private func apply(_ result: AnswerPipeline.TurnResult) {
     context = result.context
-    lastAnswer = result.answer
-    lastFollowUp = result.followUp
-    lastSpokenText = result.spokenText
+    lastAnswerText = result.spokenText
     lastTimeToFirstAudio = result.timeToFirstAudio
-
-    if let word = result.capturedWord?.text {
-      lastWord = word
-      if !sessionWords.contains(word) { sessionWords.append(word) }
-    } else if let word = result.context.lastAnswerWord {
-      lastWord = word
-    }
-
-    if result.senses.isEmpty, result.answer != nil {
-      banner = "Answering from memory — the dictionary is unreachable."
-    } else if result.intent != .unintelligible {
-      banner = nil
-    }
+    banner = nil
   }
 
   /// Reopen the microphone and hold the follow-up window open.
@@ -683,10 +642,7 @@ final class VoiceSessionController {
   private func resetTurnState() {
     liveTranscript = ""
     lastQuestion = ""
-    lastWord = ""
-    lastAnswer = nil
-    lastFollowUp = nil
-    lastSpokenText = ""
+    lastAnswerText = ""
     lastTimeToFirstAudio = nil
     sessionWords = []
   }

@@ -1,33 +1,34 @@
 //
 // LlamaAnswerEngine.swift
 //
-// The llama.cpp-backed implementation of AnswerEngine.
+// llama.cpp, doing one thing: turning the reader's words into a short spoken answer.
 //
-// Three things here are load-bearing for the product:
+// Three properties are load-bearing:
 //
-//  1. GRAMMAR. Every generation is constrained by a GBNF grammar, so the model cannot
-//     emit anything but the expected JSON object. With a 1.7B model this is the
-//     difference between "usually parses" and "always parses" — and it means the
-//     first token is guaranteed to be `{`, which makes a <think> block structurally
-//     impossible regardless of what the chat template does.
+//  1. ONE PROMPT. There is a single system prompt and no modes, so its KV entries are
+//     decoded once — at prepare(), before anyone has asked anything — and reused for
+//     every turn of the session. Per-turn prefill is just the turn itself, a few
+//     dozen tokens. The previous design's mode switching re-decoded hundreds of
+//     tokens of static text on every question and was most of a six-second turn.
 //
-//  2. PREFIX CACHE. The system prompt is decoded once per session and its KV entries
-//     are kept; each question only removes and re-decodes the turn that follows it.
-//     That takes ~150 tokens of prefill off the latency path of every question.
+//  2. CPU ONLY. iOS refuses GPU work from a backgrounded app, and the locked phone is
+//     the scenario this app exists for. Verified on device: Metal inference dies with
+//     kIOGPUCommandBufferCallbackErrorBackgroundExecutionNotPermitted the moment the
+//     screen locks, and the failure wedges the backend. See `gpuLayers`.
 //
-//  3. MMAP. The model is loaded with LLAMA_LOAD_MODE_MMAP so its weights are clean,
-//     file-backed pages the OS can evict and re-fault. The reading session sits
-//     backgrounded for an hour; mlock'd weights would make it a Jetsam target.
+//  3. MMAP. Weights are clean file-backed pages the OS can evict and re-fault, which
+//     is what lets a session sit backgrounded for an hour without becoming the first
+//     Jetsam casualty.
 //
 // The type is an actor because a llama context is not thread-safe. The generation
-// loop yields between tokens so the actor stays responsive to cancellation — barge-in
-// has to be able to stop speech mid-answer.
+// loop yields between tokens so cancellation — a new question, the session ending —
+// can actually land.
 //
 
 import Foundation
-import os
 import LlamaSwift
 import UIKit
+import os
 
 actor LlamaAnswerEngine: AnswerEngine {
 
@@ -39,24 +40,19 @@ actor LlamaAnswerEngine: AnswerEngine {
   private var context: OpaquePointer?
   private var vocab: OpaquePointer?
 
-  /// Number of tokens of system prefix currently resident in the KV cache, and which
-  /// prompt mode produced them. A different mode means a different system prompt,
-  /// which invalidates the cached prefix.
+  /// Tokens of system prompt resident in the KV cache. Decoded once per model load;
+  /// with a single prompt there is nothing left that can invalidate it.
   private var cachedPrefixTokens: Int32 = 0
-  private var cachedPrefixMode: AnswerPrompt.Mode?
 
   private var state: AnswerEngineReadiness = .notReady
 
-  /// Bumped to supersede an in-flight generation. The loop compares against its own
-  /// captured id, so both `cancelCurrent()` and a newer question stop the old one.
+  /// Bumped to supersede an in-flight generation.
   private var generationID: UInt64 = 0
 
-  /// Holds bytes that end mid-UTF8-sequence: a multi-byte character can straddle two
-  /// tokens, and decoding half of one produces mojibake in the spoken answer.
+  /// Bytes of a UTF-8 sequence split across tokens, held until it completes.
   private var pendingBytes: [UInt8] = []
 
-  /// Consecutive fatal decode failures. One is usually recoverable by clearing the
-  /// KV cache; a second means the context itself is wedged and only a reload helps.
+  /// Consecutive fatal decode failures; see recoverFromDecodeFailure().
   private var consecutiveDecodeFailures = 0
 
   private static var backendInitialized = false
@@ -64,27 +60,19 @@ actor LlamaAnswerEngine: AnswerEngine {
   private let contextTokens: UInt32 = 2048
   private let batchTokens: UInt32 = 512
 
+  /// Decode threads. An A16 has two performance and four efficiency cores; spreading
+  /// a decode across all six makes every step wait on the slowest thread.
+  private let threads: Int32 = 4
+  /// Prefill parallelises much better than decode, so it may use the efficiency
+  /// cores profitably.
+  private let batchThreads: Int32 = 6
+
   // MARK: - Compute placement
 
-  /// How many layers to offload to Metal. 99 means all of them; 0 means CPU only.
-  ///
-  /// **Defaults to 0, and that is a product decision rather than a tuning choice.**
-  ///
-  /// iOS refuses to execute GPU work for an app that is not frontmost. A Metal command
-  /// buffer submitted from the background fails with
-  /// `kIOGPUCommandBufferCallbackErrorBackgroundExecutionNotPermitted`, llama.cpp
-  /// reports `llama_decode returned -3`, and — worse — the ggml Metal backend latches
-  /// into an error state that survives until the context is recreated. So Metal makes
-  /// answers fast in the hand and impossible with the phone locked, and the locked
-  /// phone is the scenario the whole architecture exists to serve.
-  ///
-  /// CPU inference is slower but has no such restriction, which makes it the only
-  /// setting where the app behaves the same way in every state it can be in.
-  ///
-  /// Measured on an iPhone 14 Pro: Metal is one to two seconds faster per answer, and
-  /// that is not worth a feature that fails outright in the state the app is designed
-  /// to be used in. Shipping builds are CPU-only and cannot be configured otherwise —
-  /// the override exists so the two can still be compared on device.
+  /// GPU layers to offload. **0 — CPU only — is the shipping configuration**, because
+  /// Metal cannot execute while the app is backgrounded and a locked phone must
+  /// answer exactly like an unlocked one. The DEBUG override exists to measure the
+  /// difference on device, nothing more.
   static var gpuLayers: Int32 {
     get {
       #if DEBUG
@@ -103,22 +91,15 @@ actor LlamaAnswerEngine: AnswerEngine {
 
   private static let gpuLayersKey = "luna.llama.gpuLayers"
 
-  /// Threads for CPU inference.
-  ///
-  /// Fewer than the core count on purpose. An A16 has two performance cores and four
-  /// efficiency cores; spreading a decode across all six makes every step wait on the
-  /// slowest thread, so the efficiency cores cost throughput rather than adding it.
-  private let threads: Int32 = 4
-
-  /// Change the offload setting and reload the model so it takes effect.
+  /// Change the offload setting and reload so it takes effect. Debug harness only.
   func setGPULayers(_ layers: Int32) async throws {
     guard Self.gpuLayers != layers else { return }
     Self.gpuLayers = layers
     guard LlamaModelStore.shared.isModelPresent else { return }
-    let url = LlamaModelStore.shared.modelFileURL
     state = .loading
     do {
-      try loadModel(at: url)
+      try loadModel(at: LlamaModelStore.shared.modelFileURL)
+      try prewarmSystemPrefix()
       state = .ready
     } catch {
       state = .failed(error.localizedDescription)
@@ -132,10 +113,6 @@ actor LlamaAnswerEngine: AnswerEngine {
 
   func prepare(onProgress: @Sendable @escaping (AnswerEngineReadiness) -> Void) async throws {
     if case .ready = state {
-      // Report anyway. A caller that attached only now has never seen a callback, and
-      // returning in silence leaves it believing the model is still unavailable — which
-      // is exactly what a second session, or any caller after the debug harness has
-      // already loaded the model, would conclude.
       onProgress(state)
       return
     }
@@ -155,7 +132,11 @@ actor LlamaAnswerEngine: AnswerEngine {
       onProgress(state)
       let loadStarted = Date()
       try loadModel(at: url)
-      Log.llm.info("model loaded in \(Int(Date().timeIntervalSince(loadStarted) * 1000), privacy: .public) ms — \(Self.gpuLayers, privacy: .public) GPU layers")
+
+      // Decode the system prompt now, while nobody is waiting for an answer. This is
+      // what makes the first question of a session cost the same as the fifth.
+      try prewarmSystemPrefix()
+      Log.llm.info("model ready in \(Int(Date().timeIntervalSince(loadStarted) * 1000), privacy: .public) ms — \(Self.gpuLayers, privacy: .public) GPU layers, prefix prewarmed (\(self.cachedPrefixTokens, privacy: .public) tokens)")
 
       state = .ready
       onProgress(state)
@@ -218,7 +199,7 @@ actor LlamaAnswerEngine: AnswerEngine {
   /// Creates the inference context, replacing any existing one.
   ///
   /// Separate from model loading because the compute backend lives with the context,
-  /// not the model — so this is also the recovery path after a backend failure, and it
+  /// not the model — this is also the recovery path after a backend failure, and it
   /// is far cheaper than re-reading a gigabyte of weights.
   private func makeContext() throws {
     guard let model else { throw AnswerEngineError.modelUnavailable }
@@ -226,13 +207,12 @@ actor LlamaAnswerEngine: AnswerEngine {
     if let context { llama_free(context) }
     context = nil
     cachedPrefixTokens = 0
-    cachedPrefixMode = nil
 
     var ctxParams = llama_context_default_params()
     ctxParams.n_ctx = contextTokens
     ctxParams.n_batch = batchTokens
     ctxParams.n_threads = threads
-    ctxParams.n_threads_batch = threads
+    ctxParams.n_threads_batch = batchThreads
 
     guard let ctx = llama_init_from_model(model, ctxParams) else {
       throw AnswerEngineError.modelLoadFailed("could not create context")
@@ -240,8 +220,16 @@ actor LlamaAnswerEngine: AnswerEngine {
     context = ctx
   }
 
-  /// Frees the model. Called on memory pressure while the session is idle; the next
-  /// question pays the reload.
+  /// Decode the constant system prefix into the KV cache so no turn ever pays for it.
+  private func prewarmSystemPrefix() throws {
+    guard context != nil else { throw AnswerEngineError.modelUnavailable }
+    let prefix = tokenize(PromptBuilder.systemPrefix(), addSpecial: true)
+    try decode(prefix)
+    cachedPrefixTokens = Int32(prefix.count)
+  }
+
+  /// Frees the model. Called on memory pressure while idle; the next question pays
+  /// the reload.
   func unload() {
     unloadLocked()
     state = .notReady
@@ -254,7 +242,6 @@ actor LlamaAnswerEngine: AnswerEngine {
     model = nil
     vocab = nil
     cachedPrefixTokens = 0
-    cachedPrefixMode = nil
   }
 
   // MARK: - Generation
@@ -272,172 +259,84 @@ actor LlamaAnswerEngine: AnswerEngine {
     let myID = generationID
     pendingBytes.removeAll(keepingCapacity: true)
 
-    let generationStarted = Date()
-    Log.llm.info("generation started — mode \(String(describing: prompt.mode), privacy: .public), word \"\(prompt.word ?? "-", privacy: .public)\"")
+    let started = Date()
+    Log.llm.info("generation started — \"\(prompt.utterance, privacy: .public)\"")
 
-    // ── Prompt assembly, with prefix reuse ─────────────────────────────────
-    if cachedPrefixMode != prompt.mode {
-      // Different contract → different system prompt → the cached prefix is wrong.
-      // Clearing sequence 0 from position 0 empties the cache; this app only ever
-      // uses one sequence, and seq_rm is the call already verified against the
-      // package's headers.
-      llama_memory_seq_rm(llama_get_memory(context), 0, 0, -1)
-      let prefix = tokenize(PromptBuilder.systemPrefix(for: prompt.mode), addSpecial: true)
-      try decode(prefix)
-      cachedPrefixTokens = Int32(prefix.count)
-      cachedPrefixMode = prompt.mode
-      Log.llm.info("system prefix decoded fresh — \(prefix.count, privacy: .public) tokens")
-    } else {
-      // Keep the system prefix, drop everything after it.
-      llama_memory_seq_rm(llama_get_memory(context), 0, cachedPrefixTokens, -1)
-      Log.llm.info("system prefix reused from KV cache — \(self.cachedPrefixTokens, privacy: .public) tokens skipped")
-    }
+    // Keep the prewarmed system prefix; drop whatever the previous turn left.
+    llama_memory_seq_rm(llama_get_memory(context), 0, cachedPrefixTokens, -1)
 
     let turn = tokenize(PromptBuilder.turnSuffix(for: prompt), addSpecial: false)
-    guard cachedPrefixTokens + Int32(turn.count) + Int32(PromptBuilder.maxTokens(for: prompt.mode))
+    guard cachedPrefixTokens + Int32(turn.count) + Int32(AnswerSampling.maxTokens)
             < Int32(contextTokens) else {
       throw AnswerEngineError.generationFailed("prompt too long for context")
     }
     try decode(turn)
-    Log.llm.info("prefill done — \(turn.count, privacy: .public) turn tokens in \(Int(Date().timeIntervalSince(generationStarted) * 1000), privacy: .public) ms")
+    Log.llm.info("prefill done — \(turn.count, privacy: .public) turn tokens in \(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms (prefix reused: \(self.cachedPrefixTokens, privacy: .public))")
 
-    // ── Sampler: grammar first so it masks the logits, then greedy ─────────
+    // ── Sampler: Qwen's recommended prose settings ─────────────────────────
     let chainParams = llama_sampler_chain_default_params()
     guard let chain = llama_sampler_chain_init(chainParams) else {
       throw AnswerEngineError.generationFailed("sampler chain")
     }
     defer { llama_sampler_free(chain) }
 
-    guard let grammar = llama_sampler_init_grammar(
-      vocab, PromptBuilder.grammar(for: prompt.mode), "root"
-    ) else {
-      throw AnswerEngineError.generationFailed("grammar rejected by llama.cpp")
-    }
-    llama_sampler_chain_add(chain, grammar)
-    llama_sampler_chain_add(chain, llama_sampler_init_greedy())
+    llama_sampler_chain_add(chain, llama_sampler_init_top_k(AnswerSampling.topK))
+    llama_sampler_chain_add(chain, llama_sampler_init_top_p(AnswerSampling.topP, 1))
+    llama_sampler_chain_add(chain, llama_sampler_init_temp(AnswerSampling.temperature))
+    llama_sampler_chain_add(chain, llama_sampler_init_dist(UInt32.random(in: .min ... .max)))
 
-    // ── Decode loop ─────────────────────────────────────────────────────────
-    let expectedKeys: [StreamingJSONFieldScanner.ExpectedField] = switch prompt.mode {
-    case .followUp: AnswerSchema.followUpKeys
-    case .intentClassification: AnswerSchema.intentKeys
-    case .define, .exampleSentence: AnswerSchema.groundedKeys
-    }
-    var scanner = StreamingJSONFieldScanner(expected: expectedKeys)
+    // ── Decode loop: plain text, straight through to speech ─────────────────
+    var stripper = ThinkStripper()
     var splitter = ClauseSplitter()
+    var answer = ""
     var produced = 0
-    let limit = PromptBuilder.maxTokens(for: prompt.mode)
 
-    while produced < limit {
+    while produced < AnswerSampling.maxTokens {
       guard myID == generationID else { throw AnswerEngineError.cancelled }
       try Task.checkCancellation()
 
-      // llama_sampler_sample() applies the chain, selects a token, AND accepts it into
-      // the chain's state. Calling llama_sampler_accept() again here would advance the
-      // grammar a second time over the same token, which empties its stack and
-      // aborts — the C++ side throws rather than returning an error.
       let token = llama_sampler_sample(chain, context, -1)
       if llama_vocab_is_eog(vocab, token) { break }
 
-      let text = decodePiece(token)
-      if !text.isEmpty {
-        for field in scanner.consume(text) {
-          emit(field, mode: prompt.mode, splitter: &splitter, into: continuation)
+      let piece = decodePiece(token)
+      let speakableText = stripper.consume(piece)
+      if !speakableText.isEmpty {
+        answer += speakableText
+        for clause in splitter.consume(speakableText) {
+          continuation.yield(.speakable(clause))
         }
       }
 
       try decode([token])
       produced += 1
-
-      // Lets cancellation and a superseding question actually reach this actor.
       await Task.yield()
     }
-
-    let decodeSeconds = Date().timeIntervalSince(generationStarted)
-    Log.llm.info("generation done — \(produced, privacy: .public) tokens in \(Int(decodeSeconds * 1000), privacy: .public) ms (\(String(format: "%.1f", Double(produced) / max(decodeSeconds, 0.001)), privacy: .public) tok/s)")
 
     if let tail = splitter.flush() {
       continuation.yield(.speakable(tail))
     }
 
-    // ── Authoritative result ────────────────────────────────────────────────
-    // The incremental events exist for latency; this decode is what the app trusts.
-    switch prompt.mode {
-    case .followUp:
-      let answer = try scanner.decode(FollowUpAnswer.self)
-      continuation.yield(.final(.followUp(answer)))
-    case .intentClassification:
-      let classified = try scanner.decode(ClassifiedIntent.self)
-      continuation.yield(.final(.classified(classified)))
-    case .define, .exampleSentence:
-      let raw = try scanner.decode(GroundedAnswer.self)
-      continuation.yield(.final(.grounded(raw.validated(againstSenseCount: prompt.candidateSenses.count))))
-    }
-  }
+    let seconds = Date().timeIntervalSince(started)
+    Log.llm.info("generation done — \(produced, privacy: .public) tokens in \(Int(seconds * 1000), privacy: .public) ms (\(String(format: "%.1f", Double(produced) / max(seconds, 0.001)), privacy: .public) tok/s)")
 
-  /// Routes a completed JSON field to the UI and, where it is speech, to TTS.
-  private func emit(
-    _ field: StreamingJSONFieldScanner.Emitted,
-    mode: AnswerPrompt.Mode,
-    splitter: inout ClauseSplitter,
-    into continuation: AsyncThrowingStream<AnswerStreamEvent, Error>.Continuation
-  ) {
-    switch field.key {
-    case "sense_id":
-      if let id = Int(field.value) { continuation.yield(.field(.senseID(id))) }
-
-    case "short_gloss":
-      continuation.yield(.field(.gloss(field.value)))
-      speak(field.value, splitter: &splitter, into: continuation)
-
-    case "example":
-      continuation.yield(.field(.example(field.value)))
-      speak(field.value, splitter: &splitter, into: continuation)
-
-    case "answer":
-      continuation.yield(.field(.followUpAnswer(field.value)))
-      speak(field.value, splitter: &splitter, into: continuation)
-
-    case "confidence":
-      if let confidence = GroundedAnswer.Confidence(rawValue: field.value) {
-        continuation.yield(.field(.confidence(confidence)))
-      }
-
-    default:
-      break
-    }
-  }
-
-  private func speak(
-    _ text: String,
-    splitter: inout ClauseSplitter,
-    into continuation: AsyncThrowingStream<AnswerStreamEvent, Error>.Continuation
-  ) {
-    for clause in splitter.consume(text + " ") {
-      continuation.yield(.speakable(clause))
-    }
+    continuation.yield(.final(answer.trimmingCharacters(in: .whitespacesAndNewlines)))
   }
 
   // MARK: - Failure recovery
 
   /// Put the context back into a usable state after a fatal decode.
   ///
-  /// Without this, one failure ends the session: the prefix cache still claims tokens
-  /// that the failed batch may have left half-written, so every subsequent question
-  /// decodes into a corrupted context and fails the same way until the app is
-  /// relaunched. The reader experiences that as "Luna stopped working", which is a
-  /// far worse outcome than one slow answer.
+  /// ggml states the requirement outright: "backend is in error state from a previous
+  /// command buffer failure - recreate the backend to recover". The backend lives
+  /// with the context, so the context is rebuilt (and the prefix re-warmed); without
+  /// this, one failed decode ends every answer until the app relaunches.
   private func recoverFromDecodeFailure() {
     consecutiveDecodeFailures += 1
     pendingBytes.removeAll(keepingCapacity: true)
 
-    // ggml states the requirement outright: "backend is in error state from a previous
-    // command buffer failure - recreate the backend to recover". Clearing the KV cache
-    // is not enough and never was — the backend lives with the context, so the context
-    // has to be rebuilt. Without this, a single failed decode ends the app's ability to
-    // answer anything until it is relaunched, which is how one locked-screen question
-    // turned into "the model stopped working".
     do {
       try makeContext()
+      try prewarmSystemPrefix()
     } catch {
       unloadLocked()
       state = .notReady
@@ -445,8 +344,8 @@ actor LlamaAnswerEngine: AnswerEngine {
       return
     }
 
-    // A fresh context that fails again is not a transient fault. Drop the model so the
-    // next question pays a full reload rather than failing a third time.
+    // A fresh context that fails again is not a transient fault; drop the model so
+    // the next question pays a reload rather than failing a third time.
     if consecutiveDecodeFailures >= 3 {
       unloadLocked()
       state = .notReady
@@ -454,11 +353,7 @@ actor LlamaAnswerEngine: AnswerEngine {
     }
   }
 
-  /// Adds the reason to a decode failure when the reason is knowable.
-  ///
-  /// `llama_decode returned -3` on its own sends anyone reading it into llama.cpp's
-  /// source. On iOS it almost always means one specific thing, and saying so is the
-  /// difference between a five-minute diagnosis and an afternoon.
+  /// Names the one iOS-specific cause of a decode failure worth explaining.
   private func explain(_ error: Error) async -> Error {
     guard case AnswerEngineError.generationFailed(let detail) = error,
           detail.contains("llama_decode") else { return error }
@@ -487,7 +382,6 @@ actor LlamaAnswerEngine: AnswerEngine {
       vocab, cString, textLength, &tokens, Int32(tokens.count), addSpecial, true
     )
     if count < 0 {
-      // Negative return is the negated required capacity.
       tokens = [llama_token](repeating: 0, count: Int(-count))
       count = llama_tokenize(
         vocab, cString, textLength, &tokens, Int32(tokens.count), addSpecial, true
@@ -536,5 +430,72 @@ actor LlamaAnswerEngine: AnswerEngine {
     }
     pendingBytes.removeAll(keepingCapacity: true)
     return text
+  }
+}
+
+// MARK: - Think stripper
+
+/// Removes a `<think>…</think>` span from a token stream before it can be spoken.
+///
+/// The prompt disables thinking, but a guardrail that depends on a model always
+/// following instructions is not a guardrail. This is the whole defence: nothing
+/// between the tags — and no fragment of the tags themselves — ever reaches the
+/// clause splitter.
+struct ThinkStripper {
+
+  private enum State { case scanning, inThink }
+  private var state: State = .scanning
+  /// Holds a suffix that might be the start of a tag split across tokens.
+  private var held = ""
+
+  private static let open = "<think>"
+  private static let close = "</think>"
+
+  /// Feed raw model text; returns only what is safe to speak.
+  mutating func consume(_ chunk: String) -> String {
+    var buffer = held + chunk
+    held = ""
+    var out = ""
+
+    while !buffer.isEmpty {
+      switch state {
+      case .scanning:
+        if let range = buffer.range(of: Self.open) {
+          out += buffer[..<range.lowerBound]
+          buffer = String(buffer[range.upperBound...])
+          state = .inThink
+        } else if let partial = Self.partialSuffix(of: buffer, matching: Self.open) {
+          out += buffer.dropLast(partial.count)
+          held = partial
+          buffer = ""
+        } else {
+          out += buffer
+          buffer = ""
+        }
+
+      case .inThink:
+        if let range = buffer.range(of: Self.close) {
+          buffer = String(buffer[range.upperBound...])
+          state = .scanning
+        } else if let partial = Self.partialSuffix(of: buffer, matching: Self.close) {
+          held = partial
+          buffer = ""
+        } else {
+          buffer = ""  // discard reasoning text
+        }
+      }
+    }
+    return out
+  }
+
+  /// The longest suffix of `text` that is a proper prefix of `tag`, or nil.
+  private static func partialSuffix(of text: String, matching tag: String) -> String? {
+    let maxLength = min(text.count, tag.count - 1)
+    guard maxLength > 0 else { return nil }
+    for length in stride(from: maxLength, through: 1, by: -1) {
+      let suffix = String(text.suffix(length))
+      if tag.hasPrefix(suffix) { return suffix }
+    }
+    return nil
   }
 }

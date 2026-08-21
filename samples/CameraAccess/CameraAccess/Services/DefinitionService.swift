@@ -12,7 +12,7 @@ struct WordDefinition {
 /// numbered list of these and asks which one fits the reader's sentence. `id` is the
 /// number the model returns as `sense_id`, so it is 1-based (`0` means "none fit").
 struct DictionarySense: Codable, Sendable, Identifiable, Equatable {
-  /// 1-based; referenced by `GroundedAnswer.senseID`.
+  /// 1-based ordinal, stable within one lookup.
   let id: Int
   /// e.g. "adjective" — rendered as small-caps amber in the answer card.
   let partOfSpeech: String

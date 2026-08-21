@@ -24,18 +24,24 @@ actor LlamaModelStore {
 
   static let shared = LlamaModelStore()
 
-  /// Qwen3 1.7B, 4-bit K-quant. Chosen for Korean strength at this size and for
-  /// fitting comfortably on an A16 alongside the audio pipeline.
+  /// Qwen3 1.7B, Q4_0. Chosen for Korean strength at this size — and Q4_0
+  /// specifically because inference is CPU-only (Metal cannot run backgrounded on
+  /// iOS) and llama.cpp repacks Q4_0 into ARM i8mm/dotprod kernels at load, which
+  /// decodes meaningfully faster than the K-quants on Apple CPUs. The quality gap at
+  /// this size is smaller than the latency gap.
   ///
   /// Sourced from unsloth rather than the official Qwen GGUF repo: Qwen publishes only
   /// a Q8_0 build (~1.8 GB), which is both larger than an iPhone should carry and
   /// slower to decode than the quality difference justifies at this size.
-  static let modelFileName = "Qwen3-1.7B-Q4_K_M.gguf"
+  static let modelFileName = "Qwen3-1.7B-Q4_0.gguf"
   static let modelURL = URL(
-    string: "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
+    string: "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf"
   )!
+  /// Model files this build no longer uses, cleaned up on first access so a
+  /// superseded gigabyte doesn't strand on the reader's phone.
+  static let supersededFileNames = ["Qwen3-1.7B-Q4_K_M.gguf"]
   /// Used only to render a size estimate before the first byte arrives.
-  static let approximateBytes: Int64 = 1_120_000_000
+  static let approximateBytes: Int64 = 1_070_000_000
 
   enum StoreError: LocalizedError {
     case badResponse(Int)
@@ -80,9 +86,20 @@ actor LlamaModelStore {
   /// Returns the local model path, downloading it first if necessary.
   /// Progress is reported as 0...1 while downloading.
   func ensureModel(onProgress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+    removeSupersededModels()
     if isModelPresent { return modelFileURL }
     try await download(onProgress: onProgress)
     return modelFileURL
+  }
+
+  /// Deletes model files from earlier builds (and their partials).
+  private func removeSupersededModels() {
+    let fm = FileManager.default
+    for name in Self.supersededFileNames {
+      let url = Self.applicationSupport.appendingPathComponent(name)
+      try? fm.removeItem(at: url)
+      try? fm.removeItem(at: url.appendingPathExtension("partial"))
+    }
   }
 
   private func download(onProgress: @escaping @Sendable (Double) -> Void) async throws {

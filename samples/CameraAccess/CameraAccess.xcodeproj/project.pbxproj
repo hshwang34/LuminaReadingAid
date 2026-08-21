@@ -7,20 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0BF0AA000000000000000301 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000302 /* Log.swift */; };
-		0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */; };
-		0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000204 /* UtteranceTranscriber.swift */; };
-		0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */; };
-		0BF0AA000000000000000207 /* VoiceSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000208 /* VoiceSessionController.swift */; };
-		0BF0AA000000000000000209 /* VoiceSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA00000000000000020A /* VoiceSessionView.swift */; };
-		0BF0AA0000000000000000B8 /* SenseProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F8 /* SenseProvider.swift */; };
-		0BF0AA0000000000000000B9 /* AnswerPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F9 /* AnswerPipeline.swift */; };
-		0BF0AA0000000000000000BA /* AVSpeechTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000FA /* AVSpeechTTSEngine.swift */; };
-		0BF0AA0000000000000000BB /* AnswerHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000FB /* AnswerHarnessView.swift */; };
-		0BF0AA0000000000000000E2 /* LlamaModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000E1 /* LlamaModelStore.swift */; };
-		0BF0AA0000000000000000E4 /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000E3 /* PromptBuilder.swift */; };
-		0BF0AA0000000000000000E6 /* LlamaAnswerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000E5 /* LlamaAnswerEngine.swift */; };
-		0BF0AA0000000000000000C3 /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 0BF0AA0000000000000000C2 /* LlamaSwift */; };
 		0B0BA9C52F884A7D00F7E51D /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 0B0BA9C42F884A7D00F7E51D /* MLXLLM */; };
 		0B0BA9C72F884A7D00F7E51D /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 0B0BA9C62F884A7D00F7E51D /* MLXLMCommon */; };
 		0B0BA9C92F884CD100F7E51D /* HighlightGestureTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0BA9C82F884CD100F7E51D /* HighlightGestureTracker.swift */; };
@@ -107,10 +93,23 @@
 		0BF0AA0000000000000000B1 /* AnswerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F1 /* AnswerEngine.swift */; };
 		0BF0AA0000000000000000B2 /* DefinitionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F2 /* DefinitionCache.swift */; };
 		0BF0AA0000000000000000B3 /* IntentRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F3 /* IntentRouter.swift */; };
-		0BF0AA0000000000000000B4 /* StreamingJSONFieldScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F4 /* StreamingJSONFieldScanner.swift */; };
 		0BF0AA0000000000000000B5 /* WordPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F5 /* WordPersistenceService.swift */; };
 		0BF0AA0000000000000000B6 /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F6 /* TTSEngine.swift */; };
 		0BF0AA0000000000000000B7 /* WakeWordSpotting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F7 /* WakeWordSpotting.swift */; };
+		0BF0AA0000000000000000B8 /* SenseProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F8 /* SenseProvider.swift */; };
+		0BF0AA0000000000000000B9 /* AnswerPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000F9 /* AnswerPipeline.swift */; };
+		0BF0AA0000000000000000BA /* AVSpeechTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000FA /* AVSpeechTTSEngine.swift */; };
+		0BF0AA0000000000000000BB /* AnswerHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000FB /* AnswerHarnessView.swift */; };
+		0BF0AA0000000000000000C3 /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 0BF0AA0000000000000000C2 /* LlamaSwift */; };
+		0BF0AA0000000000000000E2 /* LlamaModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000E1 /* LlamaModelStore.swift */; };
+		0BF0AA0000000000000000E4 /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000E3 /* PromptBuilder.swift */; };
+		0BF0AA0000000000000000E6 /* LlamaAnswerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA0000000000000000E5 /* LlamaAnswerEngine.swift */; };
+		0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */; };
+		0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000204 /* UtteranceTranscriber.swift */; };
+		0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */; };
+		0BF0AA000000000000000207 /* VoiceSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000208 /* VoiceSessionController.swift */; };
+		0BF0AA000000000000000209 /* VoiceSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA00000000000000020A /* VoiceSessionView.swift */; };
+		0BF0AA000000000000000301 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000302 /* Log.swift */; };
 		8F2D23802E856711002D0588 /* DebugMenuViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */; };
 		8F8F00782E8ACB4600A4BDAF /* WearablesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F8F00772E8ACB4500A4BDAF /* WearablesViewModel.swift */; };
 		8FD96B7F2E6F0A9800F56AB1 /* CameraAccessApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD96B792E6F0A9800F56AB1 /* CameraAccessApp.swift */; };
@@ -165,19 +164,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0BF0AA000000000000000302 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
-		0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAudioPipeline.swift; sourceTree = "<group>"; };
-		0BF0AA000000000000000204 /* UtteranceTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceTranscriber.swift; sourceTree = "<group>"; };
-		0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFSpeechWakeWordSpotter.swift; sourceTree = "<group>"; };
-		0BF0AA000000000000000208 /* VoiceSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionController.swift; sourceTree = "<group>"; };
-		0BF0AA00000000000000020A /* VoiceSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionView.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000F8 /* SenseProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SenseProvider.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000F9 /* AnswerPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPipeline.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000FA /* AVSpeechTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVSpeechTTSEngine.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000FB /* AnswerHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerHarnessView.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000E1 /* LlamaModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaModelStore.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000E3 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000E5 /* LlamaAnswerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaAnswerEngine.swift; sourceTree = "<group>"; };
 		0B0BA9C82F884CD100F7E51D /* HighlightGestureTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightGestureTracker.swift; sourceTree = "<group>"; };
 		0BA8D3812F4E385A005DCC08 /* HandTrackingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandTrackingTypes.swift; sourceTree = "<group>"; };
 		0BA8D3832F4E386D005DCC08 /* HandPoseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandPoseService.swift; sourceTree = "<group>"; };
@@ -259,13 +245,25 @@
 		0BDC74872F846E1800C7B878 /* PhoneCameraService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneCameraService.swift; sourceTree = "<group>"; };
 		0BDC74882F846E1800C7B878 /* SelectionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionOverlayView.swift; sourceTree = "<group>"; };
 		0BDC748B2F846E2000C7B878 /* CameraMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraMode.swift; sourceTree = "<group>"; };
+		0BF0AA0000000000000000E1 /* LlamaModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaModelStore.swift; sourceTree = "<group>"; };
+		0BF0AA0000000000000000E3 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
+		0BF0AA0000000000000000E5 /* LlamaAnswerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaAnswerEngine.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F1 /* AnswerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerEngine.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F2 /* DefinitionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefinitionCache.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F3 /* IntentRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentRouter.swift; sourceTree = "<group>"; };
-		0BF0AA0000000000000000F4 /* StreamingJSONFieldScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingJSONFieldScanner.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F5 /* WordPersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordPersistenceService.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F6 /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngine.swift; sourceTree = "<group>"; };
 		0BF0AA0000000000000000F7 /* WakeWordSpotting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeWordSpotting.swift; sourceTree = "<group>"; };
+		0BF0AA0000000000000000F8 /* SenseProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SenseProvider.swift; sourceTree = "<group>"; };
+		0BF0AA0000000000000000F9 /* AnswerPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPipeline.swift; sourceTree = "<group>"; };
+		0BF0AA0000000000000000FA /* AVSpeechTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVSpeechTTSEngine.swift; sourceTree = "<group>"; };
+		0BF0AA0000000000000000FB /* AnswerHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerHarnessView.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAudioPipeline.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000204 /* UtteranceTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceTranscriber.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFSpeechWakeWordSpotter.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000208 /* VoiceSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionController.swift; sourceTree = "<group>"; };
+		0BF0AA00000000000000020A /* VoiceSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionView.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000302 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		3A3A3A3A3A3A3A3A3A3A3A3A /* CameraAccess.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraAccess.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugMenuViewModel.swift; sourceTree = "<group>"; };
 		8F8F00772E8ACB4500A4BDAF /* WearablesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearablesViewModel.swift; sourceTree = "<group>"; };
@@ -318,16 +316,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0BF0AA0000000000000000A4 /* Session */ = {
-			isa = PBXGroup;
-			children = (
-				0BF0AA00000000000000020A /* VoiceSessionView.swift */,
-				0BF0AA0000000000000000FB /* AnswerHarnessView.swift */,
-			);
-			name = Session;
-			path = Views/Session;
-			sourceTree = "<group>";
-		};
 		0BBF9E822F8AE27E00E0ADAE /* BookIdentification */ = {
 			isa = PBXGroup;
 			children = (
@@ -467,7 +455,6 @@
 				0BF0AA0000000000000000F1 /* AnswerEngine.swift */,
 				0BF0AA0000000000000000F2 /* DefinitionCache.swift */,
 				0BF0AA0000000000000000F3 /* IntentRouter.swift */,
-				0BF0AA0000000000000000F4 /* StreamingJSONFieldScanner.swift */,
 				0BF0AA0000000000000000F5 /* WordPersistenceService.swift */,
 			);
 			name = Answer;
@@ -495,6 +482,16 @@
 			);
 			name = Voice;
 			path = Services/Voice;
+			sourceTree = "<group>";
+		};
+		0BF0AA0000000000000000A4 /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				0BF0AA00000000000000020A /* VoiceSessionView.swift */,
+				0BF0AA0000000000000000FB /* AnswerHarnessView.swift */,
+			);
+			name = Session;
+			path = Views/Session;
 			sourceTree = "<group>";
 		};
 		5A5A5A5A5A5A5A5A5A5A5A5A = {
@@ -712,7 +709,7 @@
 			);
 			mainGroup = 5A5A5A5A5A5A5A5A5A5A5A5A;
 			packageReferences = (
-				0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama.swift" */,
+				0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */,
 				95F7F3332DEF0D91006D1C1A /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
 				0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
 			);
@@ -765,7 +762,6 @@
 				0BF0AA0000000000000000B1 /* AnswerEngine.swift in Sources */,
 				0BF0AA0000000000000000B2 /* DefinitionCache.swift in Sources */,
 				0BF0AA0000000000000000B3 /* IntentRouter.swift in Sources */,
-				0BF0AA0000000000000000B4 /* StreamingJSONFieldScanner.swift in Sources */,
 				0BF0AA0000000000000000B5 /* WordPersistenceService.swift in Sources */,
 				0BF0AA0000000000000000B6 /* TTSEngine.swift in Sources */,
 				0BF0AA0000000000000000B7 /* WakeWordSpotting.swift in Sources */,
@@ -1166,20 +1162,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama.swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/mattt/llama.swift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.10520.0;
-			};
-		};
 		0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.29.1;
+			};
+		};
+		0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mattt/llama.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10520.0;
 			};
 		};
 		95F7F3332DEF0D91006D1C1A /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */ = {
@@ -1193,11 +1189,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		0BF0AA0000000000000000C2 /* LlamaSwift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama.swift" */;
-			productName = LlamaSwift;
-		};
 		0B0BA9C42F884A7D00F7E51D /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
@@ -1207,6 +1198,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
 			productName = MLXLMCommon;
+		};
+		0BF0AA0000000000000000C2 /* LlamaSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */;
+			productName = LlamaSwift;
 		};
 		8FD96B942E6F0F7D00F56AB1 /* MWDATCore */ = {
 			isa = XCSwiftPackageProductDependency;

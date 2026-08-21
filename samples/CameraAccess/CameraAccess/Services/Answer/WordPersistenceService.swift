@@ -44,16 +44,20 @@ struct WordPersistenceService {
 
   /// Persist the result of one answered question.
   ///
+  /// Currently unused by the voice turn — capture left the answer path in the
+  /// LM-native redesign and returns later as its own step behind the answer. The
+  /// dedupe-and-enrich semantics here are the part worth keeping.
+  ///
   /// - Parameters:
   ///   - word: already normalised by `WordNormalizer`.
-  ///   - answer: the validated model output.
-  ///   - sense: the dictionary sense the model selected, if it selected one.
+  ///   - gloss: the spoken definition, when one was produced.
+  ///   - sense: the dictionary sense that grounded the answer, if any.
   ///   - contextSentence: the reader's own spoken sentence, when they gave one.
   ///   - book: the session's bound book, if any.
   @discardableResult
   func persist(
     word: String,
-    answer: GroundedAnswer?,
+    gloss: String?,
     sense: DictionarySense?,
     contextSentence: String?,
     book: Book?
@@ -61,9 +65,9 @@ struct WordPersistenceService {
 
     let normalized = WordNormalizer.normalize(word) ?? word.lowercased()
 
-    let definition = Self.formattedDefinition(answer: answer, sense: sense)
+    let definition = Self.formattedDefinition(gloss: gloss, sense: sense)
     let pronunciation = sense?.phonetic
-    let example = answer?.example.isEmpty == false ? answer?.example : sense?.example
+    let example = sense?.example
 
     if let existing = try fetch(normalized) {
       enrich(
@@ -141,9 +145,9 @@ struct WordPersistenceService {
 
   /// Matches the "(partOfSpeech) definition" shape the rest of the app already
   /// renders, so voice-captured and camera-captured words look identical in the list.
-  static func formattedDefinition(answer: GroundedAnswer?, sense: DictionarySense?) -> String? {
-    let gloss = answer?.shortGloss.trimmingCharacters(in: .whitespacesAndNewlines)
-    let text = (gloss?.isEmpty == false ? gloss : sense?.definition)?
+  static func formattedDefinition(gloss: String?, sense: DictionarySense?) -> String? {
+    let trimmedGloss = gloss?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let text = (trimmedGloss?.isEmpty == false ? trimmedGloss : sense?.definition)?
       .trimmingCharacters(in: .whitespacesAndNewlines)
 
     guard let text, !text.isEmpty else { return nil }
