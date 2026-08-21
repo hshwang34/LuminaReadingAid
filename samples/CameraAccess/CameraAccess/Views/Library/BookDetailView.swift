@@ -6,6 +6,8 @@ struct BookDetailView: View {
   @Environment(\.modelContext) private var modelContext
   @Environment(\.dismiss) private var dismiss
   @State private var showDeleteConfirm = false
+  @State private var showBookQuiz = false
+  @StateObject private var quizVM = PracticeViewModel()
 
   // MARK: - Derived stats
 
@@ -35,6 +37,10 @@ struct BookDetailView: View {
 
   private var sortedWords: [CapturedWord] {
     book.words.sorted { $0.capturedAt > $1.capturedAt }
+  }
+
+  private var quizEligibleWords: [CapturedWord] {
+    book.words.filter { $0.definition != nil }
   }
 
   private var sortedPassages: [CapturedPassage] {
@@ -68,6 +74,11 @@ struct BookDetailView: View {
           Image(systemName: "ellipsis.circle")
             .foregroundStyle(.ink)
         }
+      }
+    }
+    .fullScreenCover(isPresented: $showBookQuiz) {
+      NavigationStack {
+        QuizView(viewModel: quizVM, quizType: .byBook)
       }
     }
     .confirmationDialog(
@@ -154,15 +165,32 @@ struct BookDetailView: View {
   @ViewBuilder
   private var wordsSection: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
-      Text("Words (\(book.words.count))")
-        .font(.sectionTitle)
-        .foregroundStyle(.ink)
-        .padding(.horizontal, Spacing.lg)
+      HStack(alignment: .firstTextBaseline) {
+        Text("Words (\(book.words.count))")
+          .font(.sectionTitle)
+          .foregroundStyle(.ink)
+        Spacer()
+        // The loop the library exists for: this book's words, straight into a quiz.
+        if quizEligibleWords.count >= 2 {
+          Button {
+            showBookQuiz = true
+            Task { await quizVM.startQuiz(words: quizEligibleWords, type: .byBook) }
+          } label: {
+            HStack(spacing: Spacing.xs) {
+              Text("Practice")
+              Image(systemName: "chevron.right").font(.caption2)
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.amber)
+          }
+        }
+      }
+      .padding(.horizontal, Spacing.lg)
 
       if book.words.isEmpty {
         EmptySectionCard(
           icon: "textformat.abc",
-          message: "No words captured yet. Point at a word while reading to capture it."
+          message: "No words yet. Ask Luna about a word while reading this book."
         )
         .padding(.horizontal, Spacing.lg)
       } else {
@@ -286,6 +314,11 @@ private struct BookWordRow: View {
           Text(word.text)
             .font(.serif(.headline, weight: .semibold))
             .foregroundStyle(.ink)
+          // Mastery at a glance: the dot deepens from pale to full amber (L0-L5).
+          Circle()
+            .fill(.amber.opacity(word.masteryLevel == 0 ? 0.15 : 0.2 + 0.16 * Double(word.masteryLevel)))
+            .frame(width: 8, height: 8)
+            .accessibilityLabel("Mastery level \(word.masteryLevel) of 5")
           Spacer()
           if let page = word.pageNumber {
             Text("p.\(page)")

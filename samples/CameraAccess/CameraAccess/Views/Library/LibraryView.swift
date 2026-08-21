@@ -1,14 +1,79 @@
 import SwiftUI
 import SwiftData
 
+//
+// LibraryView.swift
+//
+// The study shelf: books on one segment, every captured word on the other.
+// Words live in book buckets — the flat list is the same data resliced, not a
+// separate place — so both live under one roof. Session-starting lives on the
+// Session tab, not here.
+//
+
 struct LibraryView: View {
+
+  enum Segment: String, CaseIterable {
+    case books = "Books"
+    case words = "All Words"
+  }
+
   @Query(sort: \Book.dateAdded, order: .reverse) private var books: [Book]
   @State private var showAddBook = false
+  @State private var segment: Segment = .books
 
   var body: some View {
+    VStack(spacing: 0) {
+      Picker("Section", selection: $segment) {
+        ForEach(Segment.allCases, id: \.self) { segment in
+          Text(segment.rawValue).tag(segment)
+        }
+      }
+      .pickerStyle(.segmented)
+      .padding(.horizontal, Spacing.lg)
+      .padding(.vertical, Spacing.sm)
+
+      switch segment {
+      case .books:
+        booksContent
+      case .words:
+        WordsTabView()
+      }
+    }
+    .background(.parchment)
+    .navigationTitle("Library")
+    .toolbar {
+      if segment == .books {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button { showAddBook = true } label: {
+            Image(systemName: "plus")
+              .foregroundStyle(.ink)
+          }
+        }
+        #if DEBUG
+        ToolbarItem(placement: .topBarLeading) {
+          NavigationLink {
+            CoverTestHarnessView()
+          } label: {
+            Image(systemName: "testtube.2")
+              .foregroundStyle(.ink)
+          }
+        }
+        #endif
+      }
+    }
+    .navigationDestination(for: Book.self) { book in
+      BookDetailView(book: book)
+    }
+    .sheet(isPresented: $showAddBook) {
+      AddBookView()
+    }
+  }
+
+  // MARK: - Books
+
+  private var booksContent: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Spacing.xl) {
-        // Currently Reading
         let reading = books.filter { !$0.isFinished }
         if !reading.isEmpty {
           sectionHeader("Currently Reading")
@@ -25,7 +90,6 @@ struct LibraryView: View {
           }
         }
 
-        // Finished
         let finished = books.filter { $0.isFinished }
         if !finished.isEmpty {
           sectionHeader("Finished")
@@ -43,53 +107,20 @@ struct LibraryView: View {
           .padding(.horizontal, Spacing.lg)
         }
 
-        // Empty state
         if books.isEmpty {
-          VStack(spacing: Spacing.lg) {
-            Image(systemName: "books.vertical")
-              .font(.system(size: 48))
-              .foregroundStyle(.leather.opacity(0.3))
-            Text("No books yet")
-              .font(.sectionTitle)
-              .foregroundStyle(.leather)
-            Text("Start a voice session and ask Luna about words as you read, or add a book manually.")
-              .font(.subheadline)
-              .foregroundStyle(.leather.opacity(0.6))
-              .multilineTextAlignment(.center)
+          ContentUnavailableView {
+            Label("No books yet", systemImage: "books.vertical")
+          } description: {
+            Text("Ask Luna about words while you read — or add a book here to give them a home.")
+          } actions: {
+            Button("Add a Book") { showAddBook = true }
+              .buttonStyle(.borderedProminent)
+              .tint(.amber)
           }
-          .frame(maxWidth: .infinity)
-          .padding(.top, 60)
-          .padding(.horizontal, Spacing.xxl)
+          .padding(.top, Spacing.xxl)
         }
-
       }
       .padding(.vertical, Spacing.lg)
-    }
-    .background(.parchment)
-    .navigationTitle("Library")
-    .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        Button { showAddBook = true } label: {
-          Image(systemName: "plus")
-            .foregroundStyle(.ink)
-        }
-      }
-      #if DEBUG
-      ToolbarItem(placement: .topBarLeading) {
-        NavigationLink {
-          CoverTestHarnessView()
-        } label: {
-          Image(systemName: "testtube.2")
-            .foregroundStyle(.ink)
-        }
-      }
-      #endif
-    }
-    .navigationDestination(for: Book.self) { book in
-      BookDetailView(book: book)
-    }
-    .sheet(isPresented: $showAddBook) {
-      AddBookView()
     }
   }
 

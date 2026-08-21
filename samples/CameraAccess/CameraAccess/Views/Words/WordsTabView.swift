@@ -158,7 +158,6 @@ struct WordsTabView: View {
       }
     }
     .background(.parchment)
-    .navigationTitle("Words")
     .navigationDestination(for: CapturedWord.self) { word in
       WordDetailView(word: word)
     }

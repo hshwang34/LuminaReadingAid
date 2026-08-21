@@ -1,19 +1,30 @@
 import SwiftUI
 
+//
+// WordDetailView.swift
+//
+// The anti-density screen. A reader reviewing a word wants the one definition
+// that fit their book — not a dictionary page. So the first screen is: the word,
+// how to say it, ONE gloss, and the sentence it came from. Every other sense,
+// the example, the source image, and the metadata live behind an explicit
+// "Full definition" disclosure.
+//
+
 struct WordDetailView: View {
   @Bindable var word: CapturedWord
   @Environment(\.modelContext) private var modelContext
   @State private var isLookingUp = false
   @State private var lookupError: String?
   @State private var downloadProgress: Double?
+  @State private var expanded = false
 
   var body: some View {
     ScrollView {
-      VStack(spacing: Spacing.xl) {
-        // Word header
-        VStack(spacing: Spacing.sm) {
+      VStack(alignment: .leading, spacing: Spacing.lg) {
+        // Headword — the one place serif belongs.
+        VStack(alignment: .leading, spacing: Spacing.xs) {
           Text(word.text)
-            .font(.display)
+            .font(.headword)
             .foregroundStyle(.ink)
 
           if let pronunciation = word.pronunciation {
@@ -24,136 +35,48 @@ struct WordDetailView: View {
           }
         }
 
-        // Part of speech + definition
+        // Mastery, at a glance.
+        HStack(spacing: Spacing.sm) {
+          MasteryBar(level: word.masteryLevel)
+          Text(masteryLabel)
+            .font(.caption)
+            .foregroundStyle(.leather)
+        }
+
+        // The one gloss. No eyebrow label — it is the only thing here.
         if let definition = word.definition {
-          VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("DEFINITION")
-              .font(.caption)
-              .textCase(.uppercase)
-              .tracking(1.5)
-              .foregroundStyle(.amber)
-
-            Text(definition)
-              .font(.body)
-              .foregroundStyle(.ink)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.horizontal, Spacing.lg)
+          Text(definition)
+            .font(.title3)
+            .foregroundStyle(.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, Spacing.xs)
         }
 
-        // Example
-        if let example = word.exampleSentence {
-          VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("EXAMPLE")
-              .font(.caption)
-              .textCase(.uppercase)
-              .tracking(1.5)
-              .foregroundStyle(.amber)
-
-            Text("\"\(example)\"")
-              .font(.body)
-              .italic()
-              .foregroundStyle(.leather)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.horizontal, Spacing.lg)
-        }
-
-        // In context (original sentence from the book)
+        // The sentence that asked.
         if let context = word.contextPhrase,
            !context.isEmpty,
            context.lowercased() != word.text.lowercased() {
-          VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("IN CONTEXT")
-              .font(.caption)
-              .textCase(.uppercase)
-              .tracking(1.5)
-              .foregroundStyle(.amber)
-
-            Text(highlightedContext(context, word: word.text))
-              .font(.body)
-              .italic()
-              .foregroundStyle(.leather)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.horizontal, Spacing.lg)
+          Text(highlightedContext(context, word: word.text))
+            .font(.body)
+            .italic()
+            .foregroundStyle(.leather)
+            .fixedSize(horizontal: false, vertical: true)
         }
 
-        // Source image
-        if let imageData = word.imageData, let uiImage = UIImage(data: imageData) {
-          VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("CAPTURED IMAGE")
-              .font(.caption)
-              .textCase(.uppercase)
-              .tracking(1.5)
-              .foregroundStyle(.amber)
-              .padding(.horizontal, Spacing.lg)
-
-            Image(uiImage: uiImage)
-              .resizable()
-              .aspectRatio(contentMode: .fit)
-              .frame(maxHeight: 200)
-              .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card))
-              .warmShadow()
-              .padding(.horizontal, Spacing.lg)
-          }
+        if word.definition != nil {
+          disclosure
         }
 
-        // Metadata
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-          if let book = word.book {
-            Label(book.title, systemImage: "book")
-              .font(.subheadline)
-              .foregroundStyle(.leather)
-          }
-          Label(word.capturedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "clock")
-            .font(.subheadline)
-            .foregroundStyle(.leather.opacity(0.6))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Spacing.lg)
-
-        // Look up definition
         if word.definition == nil {
-          VStack(spacing: Spacing.sm) {
-            Button {
-              Task { await lookUpDefinition() }
-            } label: {
-              VStack(spacing: Spacing.xs) {
-                if let downloadProgress {
-                  ProgressView(value: downloadProgress)
-                    .tint(.amber)
-                  Text("Downloading AI model\u{2026}")
-                    .font(.caption)
-                    .foregroundStyle(.leather)
-                } else if isLookingUp {
-                  ProgressView()
-                    .tint(.parchment)
-                } else {
-                  Label("Look Up Definition", systemImage: "brain")
-                }
-              }
-              .frame(maxWidth: .infinity)
-              .padding(Spacing.lg)
-              .background(.ink, in: RoundedRectangle(cornerRadius: CornerRadius.button))
-              .foregroundStyle(.parchment)
-              .font(.headline)
-            }
-            .disabled(isLookingUp)
-
-            if let lookupError {
-              Text(lookupError)
-                .font(.caption)
-                .foregroundStyle(.brick)
-            }
-          }
-          .padding(.horizontal, Spacing.lg)
+          lookupSection
         }
       }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, Spacing.lg)
       .padding(.vertical, Spacing.lg)
     }
     .background(.parchment)
-    .navigationTitle(word.text)
+    .navigationTitle("")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
@@ -166,6 +89,120 @@ struct WordDetailView: View {
         }
       }
     }
+  }
+
+  // MARK: - Full definition disclosure
+
+  private var disclosure: some View {
+    VStack(alignment: .leading, spacing: Spacing.md) {
+      Button {
+        withAnimation(.spring(duration: 0.3)) { expanded.toggle() }
+      } label: {
+        HStack(spacing: Spacing.xs) {
+          Text(expanded ? "Less" : "Full definition")
+          Image(systemName: "chevron.right")
+            .font(.caption2)
+            .rotationEffect(.degrees(expanded ? 90 : 0))
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(.amber)
+      }
+
+      if expanded {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+          if let example = word.exampleSentence {
+            labeledBlock("Example") {
+              Text("\u{201C}\(example)\u{201D}")
+                .font(.body)
+                .italic()
+                .foregroundStyle(.leather)
+            }
+          }
+
+          if let imageData = word.imageData, let uiImage = UIImage(data: imageData) {
+            labeledBlock("Captured image") {
+              Image(uiImage: uiImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxHeight: 200)
+                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card))
+            }
+          }
+
+          labeledBlock("Details") {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+              if let book = word.book {
+                Label(book.title, systemImage: "book")
+              }
+              Label(word.capturedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "clock")
+              if let spoken = word.spokenUtterance, !spoken.isEmpty {
+                Label("Asked as \u{201C}\(spoken)\u{201D}", systemImage: "waveform")
+              }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.leather)
+          }
+        }
+        .transition(.opacity)
+      }
+    }
+    .padding(.top, Spacing.sm)
+  }
+
+  private func labeledBlock(_ label: String, @ViewBuilder content: () -> some View) -> some View {
+    VStack(alignment: .leading, spacing: Spacing.xs) {
+      Text(label.uppercased())
+        .font(.caption2.weight(.semibold))
+        .tracking(1.2)
+        .foregroundStyle(.leather.opacity(0.7))
+      content()
+    }
+  }
+
+  private var masteryLabel: String {
+    switch word.masteryLevel {
+    case 0: "New"
+    case 1...2: "Learning"
+    case 3...4: "Familiar"
+    default: "Known"
+    }
+  }
+
+  // MARK: - Look up
+
+  private var lookupSection: some View {
+    VStack(spacing: Spacing.sm) {
+      Button {
+        Task { await lookUpDefinition() }
+      } label: {
+        VStack(spacing: Spacing.xs) {
+          if let downloadProgress {
+            ProgressView(value: downloadProgress)
+              .tint(.white)
+            Text("Downloading AI model\u{2026}")
+              .font(.caption)
+          } else if isLookingUp {
+            ProgressView()
+              .tint(.white)
+          } else {
+            Label("Look Up Definition", systemImage: "brain")
+          }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(Spacing.lg)
+        .background(.amber, in: RoundedRectangle(cornerRadius: CornerRadius.button))
+        .foregroundStyle(.white)
+        .font(.headline)
+      }
+      .disabled(isLookingUp)
+
+      if let lookupError {
+        Text(lookupError)
+          .font(.caption)
+          .foregroundStyle(.brick)
+      }
+    }
+    .padding(.top, Spacing.md)
   }
 
   /// Returns an AttributedString with the target word bolded (and in ink color)
@@ -213,5 +250,25 @@ struct WordDetailView: View {
       }
     }
     isLookingUp = false
+  }
+}
+
+// MARK: - Mastery bar
+
+/// Five amber segments, one per level above zero — the same visual language as
+/// the mastery dots in book word lists and the histogram in Profile.
+struct MasteryBar: View {
+  let level: Int
+
+  var body: some View {
+    HStack(spacing: 3) {
+      ForEach(1...5, id: \.self) { step in
+        RoundedRectangle(cornerRadius: 2)
+          .fill(step <= level ? .amber : .linen)
+          .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(.hairline, lineWidth: 0.5))
+          .frame(width: 16, height: 5)
+      }
+    }
+    .accessibilityLabel("Mastery level \(level) of 5")
   }
 }
