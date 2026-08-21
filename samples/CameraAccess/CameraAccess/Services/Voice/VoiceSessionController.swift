@@ -23,11 +23,13 @@
 //
 
 import AudioToolbox
+import AVFoundation
 import os
 import Foundation
 import Observation
 import SwiftData
 import UIKit
+import UserNotifications
 
 @MainActor
 @Observable
@@ -131,6 +133,11 @@ final class VoiceSessionController {
   private var silenceTimer: Task<Void, Never>?
   private var windowTimer: Task<Void, Never>?
 
+  /// Set when the session ended in the background, where deactivating the audio
+  /// session is forbidden. Settled on the next foregrounding.
+  private var needsAudioDeactivation = false
+  private var foregroundObserver: NSObjectProtocol?
+
   /// A session left running with nobody talking to it is a battery leak, so it ends
   /// itself. Fifteen minutes is long enough to cover a chapter without a question.
   private let silenceTimeout: TimeInterval = 15 * 60
@@ -190,6 +197,7 @@ final class VoiceSessionController {
     startedAt = session.startedAt
 
     UIApplication.shared.isIdleTimerDisabled = true
+    registerForegroundObserver()
 
     // Listening starts immediately; the model loads behind it. A reader who starts a
     // session and speaks within a second should not be told to wait for a download
@@ -220,12 +228,19 @@ final class VoiceSessionController {
     // be undone without the reader unlocking the phone, so it waits.
     let isForeground = UIApplication.shared.applicationState == .active
     pipeline.stop(deactivateSession: isForeground)
+    needsAudioDeactivation = !isForeground
 
     UIApplication.shared.isIdleTimerDisabled = false
 
     readingSession?.endedAt = Date()
     try? modelContext.save()
 
+    // The observer outlives a background end on purpose: it is the only thing left
+    // that can settle the deferred audio deactivation once the app is frontmost.
+    if !needsAudioDeactivation {
+      removeForegroundObserver()
+    }
+    clearPausedNotification()
     phase = .ended(reason)
   }
 
@@ -562,6 +577,13 @@ final class VoiceSessionController {
       cancelTimers()
       banner = "Session paused — tap to resume."
       phase = .paused(.interruption)
+      // With the phone locked there is no banner to see and no way to self-heal —
+      // iOS will not hand the microphone back to a backgrounded app. A notification
+      // is the only path back in: tapping it foregrounds the app, and the foreground
+      // observer below restarts the audio.
+      if UIApplication.shared.applicationState != .active {
+        postPausedNotification()
+      }
 
     case .interruptionEnded(let shouldResume):
       // Only self-heal in the foreground. From the lock screen the app cannot
@@ -579,6 +601,72 @@ final class VoiceSessionController {
     case .voiceBegan, .voiceEnded:
       break
     }
+  }
+
+  // MARK: - Foreground recovery
+
+  private func registerForegroundObserver() {
+    guard foregroundObserver == nil else { return }
+    foregroundObserver = NotificationCenter.default.addObserver(
+      forName: UIApplication.willEnterForegroundNotification,
+      object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.handleWillEnterForeground() }
+    }
+  }
+
+  private func removeForegroundObserver() {
+    if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
+    foregroundObserver = nil
+  }
+
+  private func handleWillEnterForeground() {
+    clearPausedNotification()
+
+    // Settle the deactivation a background end had to defer.
+    if needsAudioDeactivation {
+      needsAudioDeactivation = false
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+      Log.audio.info("deferred audio session deactivation settled on foreground")
+      // If the session already ended, this observer only survived for that line.
+      if case .ended = phase { removeForegroundObserver() }
+    }
+
+    // An interruption that ended while locked could not be resumed then — the
+    // microphone is only grantable in the foreground, which is now.
+    if case .paused(.interruption) = phase {
+      Log.session.info("foregrounded while interruption-paused — attempting resume")
+      Task { await restartAudioAfterInterruption() }
+    }
+  }
+
+  // MARK: - Paused notification
+
+  private static let pausedNotificationID = "luna.session.paused"
+
+  /// "Session paused — tap to resume", delivered to the lock screen.
+  ///
+  /// Fire-and-forget on purpose: if notification permission was declined, the post
+  /// silently does nothing, and the session is still recoverable by opening the app.
+  private func postPausedNotification() {
+    let content = UNMutableNotificationContent()
+    content.title = "Reading session paused"
+    content.body = "Something interrupted the microphone. Tap to resume your session."
+    content.sound = nil  // the interruption itself was audible; don't pile on
+
+    let request = UNNotificationRequest(
+      identifier: Self.pausedNotificationID,
+      content: content,
+      trigger: nil  // deliver now
+    )
+    UNUserNotificationCenter.current().add(request)
+    Log.session.info("posted session-paused notification")
+  }
+
+  private func clearPausedNotification() {
+    let center = UNUserNotificationCenter.current()
+    center.removeDeliveredNotifications(withIdentifiers: [Self.pausedNotificationID])
+    center.removePendingNotificationRequests(withIdentifiers: [Self.pausedNotificationID])
   }
 
   private func restartAudioAfterInterruption() async {

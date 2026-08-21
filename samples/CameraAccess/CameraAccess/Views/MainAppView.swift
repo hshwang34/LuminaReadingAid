@@ -21,6 +21,11 @@ struct MainAppView: View {
   let wearables: WearablesInterface
   @ObservedObject private var viewModel: WearablesViewModel
   @AppStorage(OnboardingViewModel.hasCompletedKey) private var hasCompletedOnboarding: Bool = false
+  /// External session requests — the App Intent, the URL scheme. Observed here
+  /// because this view exists for the whole life of the UI, so no request can land
+  /// while nobody is looking.
+  @State private var launchRouter = SessionLaunchRouter.shared
+  @State private var showLaunchedSession = false
 
   init(wearables: WearablesInterface, viewModel: WearablesViewModel) {
     self.wearables = wearables
@@ -41,5 +46,29 @@ struct MainAppView: View {
       }
       .interactiveDismissDisabled(true)
     }
+    // Sessions requested from outside the view tree: Action Button, Shortcuts,
+    // Spotlight, the URL scheme. No book binding on this path — speed of entry is
+    // the point, and the session links to a book at the end if it needs one.
+    .fullScreenCover(isPresented: $showLaunchedSession) {
+      VoiceSessionView(book: nil)
+    }
+    .onChange(of: launchRouter.pendingLaunch) { _, pending in
+      guard pending else { return }
+      presentLaunchedSessionIfReady()
+    }
+    // A cold launch from the intent sets the flag before this view exists, so the
+    // change never fires — check once on appearance too.
+    .task {
+      presentLaunchedSessionIfReady()
+    }
+    .onOpenURL { url in
+      launchRouter.handle(url)
+    }
+  }
+
+  private func presentLaunchedSessionIfReady() {
+    guard launchRouter.pendingLaunch, hasCompletedOnboarding else { return }
+    launchRouter.consume()
+    showLaunchedSession = true
   }
 }

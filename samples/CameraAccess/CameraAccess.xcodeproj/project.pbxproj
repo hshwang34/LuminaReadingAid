@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BF0AA000000000000000401 /* SessionLaunchRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000402 /* SessionLaunchRouter.swift */; };
+		0BF0AA000000000000000403 /* StartReadingSessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000404 /* StartReadingSessionIntent.swift */; };
 		0B0BA9C52F884A7D00F7E51D /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 0B0BA9C42F884A7D00F7E51D /* MLXLLM */; };
 		0B0BA9C72F884A7D00F7E51D /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 0B0BA9C62F884A7D00F7E51D /* MLXLMCommon */; };
 		0B0BA9C92F884CD100F7E51D /* HighlightGestureTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0BA9C82F884CD100F7E51D /* HighlightGestureTracker.swift */; };
@@ -164,6 +166,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0BF0AA000000000000000402 /* SessionLaunchRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLaunchRouter.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000404 /* StartReadingSessionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartReadingSessionIntent.swift; sourceTree = "<group>"; };
 		0B0BA9C82F884CD100F7E51D /* HighlightGestureTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightGestureTracker.swift; sourceTree = "<group>"; };
 		0BA8D3812F4E385A005DCC08 /* HandTrackingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandTrackingTypes.swift; sourceTree = "<group>"; };
 		0BA8D3832F4E386D005DCC08 /* HandPoseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandPoseService.swift; sourceTree = "<group>"; };
@@ -316,6 +320,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0BF0AA000000000000000405 /* Intents */ = {
+			isa = PBXGroup;
+			children = (
+				0BF0AA000000000000000404 /* StartReadingSessionIntent.swift */,
+			);
+			name = Intents;
+			path = Intents;
+			sourceTree = "<group>";
+		};
 		0BBF9E822F8AE27E00E0ADAE /* BookIdentification */ = {
 			isa = PBXGroup;
 			children = (
@@ -474,6 +487,7 @@
 		0BF0AA0000000000000000A3 /* Voice */ = {
 			isa = PBXGroup;
 			children = (
+				0BF0AA000000000000000402 /* SessionLaunchRouter.swift */,
 				0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */,
 				0BF0AA000000000000000204 /* UtteranceTranscriber.swift */,
 				0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */,
@@ -552,6 +566,7 @@
 		8FD96B7D2E6F0A9800F56AB1 /* CameraAccess */ = {
 			isa = PBXGroup;
 			children = (
+				0BF0AA000000000000000405 /* Intents */,
 				0BF0AA0000000000000000A4 /* Session */,
 				0BF0AA0000000000000000A1 /* Answer */,
 				0BF0AA0000000000000000A2 /* TTS */,
@@ -746,6 +761,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BF0AA000000000000000401 /* SessionLaunchRouter.swift in Sources */,
+				0BF0AA000000000000000403 /* StartReadingSessionIntent.swift in Sources */,
 				0BF0AA000000000000000301 /* Log.swift in Sources */,
 				0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */,
 				0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */,
