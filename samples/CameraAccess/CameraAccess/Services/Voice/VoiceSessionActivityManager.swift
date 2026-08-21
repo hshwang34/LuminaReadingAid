@@ -55,6 +55,21 @@ final class VoiceSessionActivityManager {
     Task { await activity.update(.init(state: state, staleDate: nil)) }
   }
 
+  /// Replace the activity so the lock screen shows a newly bound book title.
+  /// `bookTitle` is a fixed ActivityKit attribute — the only way to change it is
+  /// to end the current activity and request a fresh one.
+  func rebind(bookTitle: String?, startedAt: Date) {
+    guard let current = activity else { return }
+    let carried = lastState
+    activity = nil
+    lastState = nil
+    Task { await current.end(nil, dismissalPolicy: .immediate) }
+    start(bookTitle: bookTitle, startedAt: startedAt)
+    if let carried {
+      update(phaseLabel: carried.phaseLabel, wordCount: carried.wordCount, isPaused: carried.isPaused)
+    }
+  }
+
   /// Ends with a short-lived summary so the reader sees what the session gathered.
   func end(wordCount: Int) {
     guard let activity else { return }

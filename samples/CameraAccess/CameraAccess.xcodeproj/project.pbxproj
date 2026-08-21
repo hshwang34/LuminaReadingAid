@@ -21,6 +21,10 @@
 		0BF0AA000000000000000520 /* VoiceSessionActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA00000000000000051F /* VoiceSessionActivityManager.swift */; };
 		0BF0AA00000000000000050C /* LuminaWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000508 /* LuminaWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0BF0AA000000000000000401 /* SessionLaunchRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000402 /* SessionLaunchRouter.swift */; };
+		0BF0AA000000000000000701 /* SessionTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000702 /* SessionTabView.swift */; };
+		0BF0AA000000000000000703 /* SessionComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000704 /* SessionComponents.swift */; };
+		0BF0AA000000000000000705 /* EdgeGlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000706 /* EdgeGlowView.swift */; };
+		0BF0AA000000000000000707 /* SessionBookLinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000708 /* SessionBookLinker.swift */; };
 		0BF0AA000000000000000403 /* StartReadingSessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000404 /* StartReadingSessionIntent.swift */; };
 		0B0BA9C92F884CD100F7E51D /* HighlightGestureTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0BA9C82F884CD100F7E51D /* HighlightGestureTracker.swift */; };
 		0BA8D3822F4E385A005DCC08 /* HandTrackingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA8D3812F4E385A005DCC08 /* HandTrackingTypes.swift */; };
@@ -121,7 +125,6 @@
 		0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000204 /* UtteranceTranscriber.swift */; };
 		0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */; };
 		0BF0AA000000000000000207 /* VoiceSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000208 /* VoiceSessionController.swift */; };
-		0BF0AA000000000000000209 /* VoiceSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA00000000000000020A /* VoiceSessionView.swift */; };
 		0BF0AA000000000000000301 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000302 /* Log.swift */; };
 		8F2D23802E856711002D0588 /* DebugMenuViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */; };
 		8F8F00782E8ACB4600A4BDAF /* WearablesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F8F00772E8ACB4500A4BDAF /* WearablesViewModel.swift */; };
@@ -206,6 +209,10 @@
 		0BF0AA00000000000000051F /* VoiceSessionActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionActivityManager.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000517 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0BF0AA000000000000000402 /* SessionLaunchRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLaunchRouter.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000702 /* SessionTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTabView.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000704 /* SessionComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionComponents.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000706 /* EdgeGlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeGlowView.swift; sourceTree = "<group>"; };
+		0BF0AA000000000000000708 /* SessionBookLinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBookLinker.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000404 /* StartReadingSessionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartReadingSessionIntent.swift; sourceTree = "<group>"; };
 		0B0BA9C82F884CD100F7E51D /* HighlightGestureTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightGestureTracker.swift; sourceTree = "<group>"; };
 		0BA8D3812F4E385A005DCC08 /* HandTrackingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandTrackingTypes.swift; sourceTree = "<group>"; };
@@ -305,7 +312,6 @@
 		0BF0AA000000000000000204 /* UtteranceTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceTranscriber.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFSpeechWakeWordSpotter.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000208 /* VoiceSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionController.swift; sourceTree = "<group>"; };
-		0BF0AA00000000000000020A /* VoiceSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionView.swift; sourceTree = "<group>"; };
 		0BF0AA000000000000000302 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		3A3A3A3A3A3A3A3A3A3A3A3A /* CameraAccess.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraAccess.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F2D237F2E856711002D0588 /* DebugMenuViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugMenuViewModel.swift; sourceTree = "<group>"; };
@@ -557,6 +563,7 @@
 			children = (
 				0BF0AA00000000000000051F /* VoiceSessionActivityManager.swift */,
 				0BF0AA000000000000000402 /* SessionLaunchRouter.swift */,
+				0BF0AA000000000000000708 /* SessionBookLinker.swift */,
 				0BF0AA000000000000000202 /* VoiceAudioPipeline.swift */,
 				0BF0AA000000000000000204 /* UtteranceTranscriber.swift */,
 				0BF0AA000000000000000206 /* SFSpeechWakeWordSpotter.swift */,
@@ -570,7 +577,9 @@
 		0BF0AA0000000000000000A4 /* Session */ = {
 			isa = PBXGroup;
 			children = (
-				0BF0AA00000000000000020A /* VoiceSessionView.swift */,
+				0BF0AA000000000000000702 /* SessionTabView.swift */,
+				0BF0AA000000000000000704 /* SessionComponents.swift */,
+				0BF0AA000000000000000706 /* EdgeGlowView.swift */,
 				0BF0AA0000000000000000FB /* AnswerHarnessView.swift */,
 			);
 			name = Session;
@@ -879,13 +888,16 @@
 				0BF0AA00000000000000051C /* VoiceSessionControlIntents.swift in Sources */,
 				0BF0AA000000000000000520 /* VoiceSessionActivityManager.swift in Sources */,
 				0BF0AA000000000000000401 /* SessionLaunchRouter.swift in Sources */,
+				0BF0AA000000000000000701 /* SessionTabView.swift in Sources */,
+				0BF0AA000000000000000703 /* SessionComponents.swift in Sources */,
+				0BF0AA000000000000000705 /* EdgeGlowView.swift in Sources */,
+				0BF0AA000000000000000707 /* SessionBookLinker.swift in Sources */,
 				0BF0AA000000000000000403 /* StartReadingSessionIntent.swift in Sources */,
 				0BF0AA000000000000000301 /* Log.swift in Sources */,
 				0BF0AA000000000000000201 /* VoiceAudioPipeline.swift in Sources */,
 				0BF0AA000000000000000203 /* UtteranceTranscriber.swift in Sources */,
 				0BF0AA000000000000000205 /* SFSpeechWakeWordSpotter.swift in Sources */,
 				0BF0AA000000000000000207 /* VoiceSessionController.swift in Sources */,
-				0BF0AA000000000000000209 /* VoiceSessionView.swift in Sources */,
 				0BF0AA0000000000000000B8 /* SenseProvider.swift in Sources */,
 				0BF0AA0000000000000000B9 /* AnswerPipeline.swift in Sources */,
 				0BF0AA0000000000000000BA /* AVSpeechTTSEngine.swift in Sources */,

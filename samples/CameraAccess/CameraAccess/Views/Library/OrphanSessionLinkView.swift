@@ -332,50 +332,9 @@ struct OrphanSessionLinkView: View {
     dismiss()
   }
 
-  /// Shared finalizer for both tap paths: bind the session, migrate the
-  /// failed-attempt pHash + canonical image onto the book, and retroactively
-  /// stamp orphan captures from this session's time window.
+  /// Shared finalizer for both tap paths — the same binding the Session tab's
+  /// book picker uses mid-session.
   private func performLink(to book: Book) {
-    session.book = book
-
-    // Seed the book's pHash index from the session's failed attempt, but
-    // only if the book doesn't already have one (don't clobber data from a
-    // previous successful identification).
-    if book.coverPHashHex == nil, let hash = session.coverAttemptPHashHex {
-      book.coverPHashHex = hash
-    }
-    if book.coverCanonicalImageData == nil, let data = session.coverAttemptImageData {
-      book.coverCanonicalImageData = data
-    }
-
-    // Retroactive stamping of captures in this session's time window.
-    // SwiftData #Predicate supports nil comparisons for optional relationships
-    // and range comparisons on Date.
-    let start = session.startedAt
-    let end = session.endedAt ?? Date()
-    let wordFetch = FetchDescriptor<CapturedWord>(
-      predicate: #Predicate<CapturedWord> {
-        $0.book == nil && $0.capturedAt >= start && $0.capturedAt <= end
-      }
-    )
-    if let orphanWords = try? modelContext.fetch(wordFetch) {
-      for word in orphanWords { word.book = book }
-      #if DEBUG
-      NSLog("[Orphan] stamped \(orphanWords.count) words onto \"\(book.title)\"")
-      #endif
-    }
-    let passageFetch = FetchDescriptor<CapturedPassage>(
-      predicate: #Predicate<CapturedPassage> {
-        $0.book == nil && $0.capturedAt >= start && $0.capturedAt <= end
-      }
-    )
-    if let orphanPassages = try? modelContext.fetch(passageFetch) {
-      for passage in orphanPassages { passage.book = book }
-      #if DEBUG
-      NSLog("[Orphan] stamped \(orphanPassages.count) passages onto \"\(book.title)\"")
-      #endif
-    }
-
-    try? modelContext.save()
+    SessionBookLinker.link(session: session, to: book, in: modelContext)
   }
 }

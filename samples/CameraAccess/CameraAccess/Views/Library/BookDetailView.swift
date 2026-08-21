@@ -1,16 +1,10 @@
 import SwiftUI
 import SwiftData
-import MWDATCore
 
 struct BookDetailView: View {
   @Bindable var book: Book
-  let wearables: any WearablesInterface
-  @ObservedObject var wearablesVM: WearablesViewModel
   @Environment(\.modelContext) private var modelContext
   @Environment(\.dismiss) private var dismiss
-  @State private var showStreaming = false
-  @State private var showPhoneCameraStreaming = false
-  @State private var showVoiceSession = false
   @State private var showDeleteConfirm = false
 
   // MARK: - Derived stats
@@ -86,15 +80,6 @@ struct BookDetailView: View {
     } message: {
       Text("This removes the book, its \(book.words.count) word\(book.words.count == 1 ? "" : "s"), \(book.passages.count) quote\(book.passages.count == 1 ? "" : "s"), and all reading sessions. The next time this book is detected, identification runs from scratch.")
     }
-    .fullScreenCover(isPresented: $showVoiceSession) {
-      VoiceSessionView(book: book)
-    }
-    .fullScreenCover(isPresented: $showStreaming) {
-      StreamSessionView(wearables: wearables, wearablesVM: wearablesVM, book: book)
-    }
-    .fullScreenCover(isPresented: $showPhoneCameraStreaming) {
-      StreamSessionView(wearables: wearables, wearablesVM: wearablesVM, cameraMode: .phoneCamera, book: book)
-    }
   }
 
   // MARK: - Sections
@@ -151,41 +136,17 @@ struct BookDetailView: View {
   }
 
   private var ctaButtons: some View {
-    VStack(spacing: Spacing.md) {
-      // Starting from the book binds every word captured in the session to it, which
-      // is the whole point of a book-centric library — no linking step afterwards.
-      Button {
-        showVoiceSession = true
-      } label: {
-        Label("Start Voice Session", systemImage: "waveform.and.mic")
-          .frame(maxWidth: .infinity)
-          .padding(Spacing.lg)
-          .background(.ink, in: RoundedRectangle(cornerRadius: CornerRadius.button))
-          .foregroundStyle(.parchment)
-          .font(.headline)
-      }
-
-      Button {
-        showStreaming = true
-      } label: {
-        Label("Start Reading Session", systemImage: "eyeglasses")
-          .frame(maxWidth: .infinity)
-          .padding(Spacing.lg)
-          .background(.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: CornerRadius.button))
-          .foregroundStyle(.ink)
-          .font(.headline)
-      }
-
-      Button {
-        showPhoneCameraStreaming = true
-      } label: {
-        Label("Use Phone Camera", systemImage: "camera.fill")
-          .frame(maxWidth: .infinity)
-          .padding(Spacing.lg)
-          .background(.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: CornerRadius.button))
-          .foregroundStyle(.ink)
-          .font(.headline)
-      }
+    // One action. Reading this book means: go to the Session tab with this book
+    // already bound — every word captured lands in this bucket, no linking after.
+    Button {
+      SessionLaunchRouter.shared.requestSession(book: book)
+    } label: {
+      Label("Read This Book", systemImage: "waveform.and.mic")
+        .frame(maxWidth: .infinity)
+        .padding(Spacing.lg)
+        .background(.amber, in: RoundedRectangle(cornerRadius: CornerRadius.button))
+        .foregroundStyle(.white)
+        .font(.headline)
     }
     .padding(.horizontal, Spacing.lg)
   }

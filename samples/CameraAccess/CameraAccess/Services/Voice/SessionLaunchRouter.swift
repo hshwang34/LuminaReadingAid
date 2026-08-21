@@ -24,13 +24,18 @@ final class SessionLaunchRouter {
   /// Set when something outside the view tree asked for a live session.
   /// The root view observes this, presents the session, and calls `consume()`.
   private(set) var pendingLaunch = false
+  /// A launch may name the book to read (Book Detail's CTA); external entry
+  /// points (widget, Control, URL) leave it nil and the reader binds by voice.
+  private(set) var pendingBook: Book?
 
-  func requestSession() {
+  func requestSession(book: Book? = nil) {
+    pendingBook = book
     pendingLaunch = true
   }
 
   func consume() {
     pendingLaunch = false
+    pendingBook = nil
   }
 
   /// The URL scheme half of the entry points. `luminareading://voice-session`

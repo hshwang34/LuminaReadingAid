@@ -113,6 +113,9 @@ final class VoiceSessionController {
   private(set) var startedAt: Date?
   /// End of the reader's speech to Luna's first sound, for the most recent question.
   private(set) var lastTimeToFirstAudio: TimeInterval?
+  /// The word the capture step filed for the current answer, if any — what turns
+  /// the answer card from prose into a dictionary entry.
+  private(set) var lastCapturedWord: CapturedWord?
 
   var book: Book?
 
@@ -209,16 +212,16 @@ final class VoiceSessionController {
     transcriber.start()
     startWakeLoop()
 
-    let session = ReadingSession(book: book)
-    modelContext.insert(session)
-    readingSession = session
-    try? modelContext.save()
-    startedAt = session.startedAt
+    // No ReadingSession row yet: the mic being on is not reading. The row is
+    // created at the first real interaction (wake or question), so opening the
+    // app to browse the library never counts toward the streak.
+    let sessionStart = Date()
+    startedAt = sessionStart
 
     UIApplication.shared.isIdleTimerDisabled = true
     registerForegroundObserver()
     Self.active = self
-    liveActivity.start(bookTitle: book?.title, startedAt: session.startedAt)
+    liveActivity.start(bookTitle: book?.title, startedAt: sessionStart)
 
     // The voice warms behind the session too — same reasoning as the LLM below:
     // nothing the reader is waiting on, so no reason to make them wait.
@@ -294,6 +297,38 @@ final class VoiceSessionController {
   /// by tests; the spoken path funnels into the same method.
   func ask(_ utterance: String) {
     runTurn(utterance)
+  }
+
+  /// Bind (or unbind) the session's book mid-flight — the Session tab's book
+  /// picker. Touches everything that captured the book at start: the prompt
+  /// context, the session row, already-captured words, and the Live Activity.
+  func bind(book newBook: Book?) {
+    guard newBook !== book else { return }
+    book = newBook
+    context.bookTitle = newBook?.title
+
+    if let readingSession {
+      if let newBook {
+        SessionBookLinker.link(session: readingSession, to: newBook, in: modelContext)
+      } else {
+        readingSession.book = nil
+        try? modelContext.save()
+      }
+    }
+
+    liveActivity.rebind(bookTitle: newBook?.title, startedAt: startedAt ?? Date())
+    Log.session.info("book bound: \(newBook?.title ?? "none", privacy: .public)")
+  }
+
+  /// The reading session row, created on first use. Existence of this row is what
+  /// the streak and the activity calendar count — see start() for why it's lazy.
+  private func ensureReadingSession() {
+    guard readingSession == nil else { return }
+    let session = ReadingSession(book: book)
+    modelContext.insert(session)
+    readingSession = session
+    try? modelContext.save()
+    Log.session.info("reading session recorded (first interaction)")
   }
 
   // MARK: - Model
@@ -374,6 +409,7 @@ final class VoiceSessionController {
       return
     }
 
+    ensureReadingSession()
     armSilenceTimeout()
     Earcon.wake.play()
     liveTranscript = strippingWakeEcho(wake.trailingTranscript)
@@ -527,9 +563,11 @@ final class VoiceSessionController {
     guard turnTask == nil else { return }
 
     Log.session.info("turn started: \"\(utterance, privacy: .public)\"")
+    ensureReadingSession()
     cancelWindow()
     armSilenceTimeout()
     lastQuestion = utterance
+    lastCapturedWord = nil
     liveTranscript = ""
     phase = .thinking
 
@@ -565,10 +603,12 @@ final class VoiceSessionController {
         // network, and this is the one place in a turn where slow is free.
         let captureTask = Task { [weak self] in
           guard let self else { return }
-          if let captured = await answers.captureWord(from: utterance, book: book),
-             !sessionWords.contains(captured.text) {
-            sessionWords.append(captured.text)
-            updateLiveActivity()
+          if let captured = await answers.captureWord(from: utterance, book: book) {
+            lastCapturedWord = captured
+            if !sessionWords.contains(captured.text) {
+              sessionWords.append(captured.text)
+              updateLiveActivity()
+            }
           }
         }
 
@@ -809,7 +849,9 @@ final class VoiceSessionController {
     lastQuestion = ""
     lastAnswerText = ""
     lastTimeToFirstAudio = nil
+    lastCapturedWord = nil
     sessionWords = []
+    readingSession = nil
   }
 }
 
