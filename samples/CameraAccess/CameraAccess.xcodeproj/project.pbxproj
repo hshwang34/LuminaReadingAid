@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		0BF0AA000000000000000401 /* SessionLaunchRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000402 /* SessionLaunchRouter.swift */; };
 		0BF0AA000000000000000403 /* StartReadingSessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF0AA000000000000000404 /* StartReadingSessionIntent.swift */; };
-		0B0BA9C52F884A7D00F7E51D /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 0B0BA9C42F884A7D00F7E51D /* MLXLLM */; };
-		0B0BA9C72F884A7D00F7E51D /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 0B0BA9C62F884A7D00F7E51D /* MLXLMCommon */; };
 		0B0BA9C92F884CD100F7E51D /* HighlightGestureTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0BA9C82F884CD100F7E51D /* HighlightGestureTracker.swift */; };
 		0BA8D3822F4E385A005DCC08 /* HandTrackingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA8D3812F4E385A005DCC08 /* HandTrackingTypes.swift */; };
 		0BA8D3842F4E386D005DCC08 /* HandPoseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA8D3832F4E386D005DCC08 /* HandPoseService.swift */; };
@@ -309,8 +307,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0BF0AA0000000000000000C3 /* LlamaSwift in Frameworks */,
-				0B0BA9C72F884A7D00F7E51D /* MLXLMCommon in Frameworks */,
-				0B0BA9C52F884A7D00F7E51D /* MLXLLM in Frameworks */,
 				8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */,
 				8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */,
 				8FD96B952E6F0F7D00F56AB3 /* MWDATMockDevice in Frameworks */,
@@ -726,7 +722,6 @@
 			packageReferences = (
 				0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */,
 				95F7F3332DEF0D91006D1C1A /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
-				0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
 			);
 			productRefGroup = 7A7A7A7A7A7A7A7A7A7A7A7A /* Products */;
 			projectDirPath = "";
@@ -1179,14 +1174,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.29.1;
-			};
-		};
 		0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mattt/llama.swift";
@@ -1206,16 +1193,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		0B0BA9C42F884A7D00F7E51D /* MLXLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
-			productName = MLXLLM;
-		};
-		0B0BA9C62F884A7D00F7E51D /* MLXLMCommon */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0B0BA9C32F884A7D00F7E51D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
-			productName = MLXLMCommon;
-		};
 		0BF0AA0000000000000000C2 /* LlamaSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0BF0AA0000000000000000C1 /* XCRemoteSwiftPackageReference "llama" */;

@@ -1,14 +1,20 @@
 //
 // OnDeviceLLMService.swift
 //
-// On-device LLM inference using MLX Swift + Qwen2.5-1.5B-Instruct-4bit.
-// Provides contextual word definitions without any server dependency.
+// The app's utility LLM work: quiz distractors, word enrichment, conversational
+// word chat, and cover-field extraction.
+//
+// Since the MLX retirement this is a thin facade over LlamaAnswerEngine — the same
+// Qwen3 GGUF the voice session uses. One model, one runtime, one download. The MLX
+// stack it replaced kept a second ~1 GB model resident alongside the session's,
+// which was a Jetsam eviction waiting for a long reading session to trigger it.
+//
+// The public API is unchanged on purpose: six call sites (quizzes, enrichment,
+// legacy capture flows) keep working untouched while the machinery under them was
+// swapped out.
 //
 
 import Foundation
-import MLX
-import MLXLLM
-import MLXLMCommon
 
 struct ChatMessage: Sendable {
   enum Role: String, Sendable { case system, user, assistant }
@@ -36,43 +42,35 @@ actor OnDeviceLLMService {
   }
 
   private(set) var state: ModelState = .idle
-  private var modelContainer: ModelContainer?
 
   var isReady: Bool {
-    if case .ready = state { return true }
-    return false
+    get async {
+      if case .ready = await LlamaAnswerEngine.shared.readiness { return true }
+      return false
+    }
   }
 
   // MARK: - Model Lifecycle
 
   func ensureModelLoaded(onProgress: @Sendable @escaping (Double) -> Void) async throws {
-    if isReady { return }
-
-    GPU.set(cacheLimit: 20 * 1024 * 1024)
-
-    state = .downloading(progress: 0)
-
-    let config = ModelConfiguration(id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit")
-
-    let container = try await LLMModelFactory.shared.loadContainer(
-      configuration: config
-    ) { progress in
-      Task { @MainActor in onProgress(progress.fractionCompleted) }
-    }
-
     state = .loading
-    self.modelContainer = container
-
-    // Warm up Metal shaders with a dummy prompt
-    _ = try await runInference(prompt: "Hi", maxTokens: 5, temperature: 0.0)
-
-    state = .ready
+    do {
+      try await LlamaAnswerEngine.shared.prepare { readiness in
+        if case .downloading(let fraction) = readiness {
+          onProgress(fraction)
+        }
+      }
+      state = .ready
+    } catch {
+      state = .error(error.localizedDescription)
+      throw error
+    }
   }
 
   // MARK: - Quiz Distractor Generation
 
   func generateQuizDistractors(word: String, correctDefinition: String) async throws -> [String] {
-    guard modelContainer != nil else {
+    guard await isReady else {
       throw LLMError.modelNotLoaded
     }
 
@@ -122,7 +120,7 @@ actor OnDeviceLLMService {
   }
 
   func generateQuizDistractorWords(correctWord: String) async throws -> [String] {
-    guard modelContainer != nil else {
+    guard await isReady else {
       throw LLMError.modelNotLoaded
     }
 
@@ -152,23 +150,21 @@ actor OnDeviceLLMService {
   // MARK: - Chat
 
   func chat(messages: [ChatMessage]) async throws -> String {
-    guard modelContainer != nil else {
-      throw LLMError.modelNotLoaded
-    }
-
     var prompt = ""
     for message in messages {
       prompt += "<|im_start|>\(message.role.rawValue)\n\(message.content)<|im_end|>\n"
     }
     prompt += "<|im_start|>assistant\n"
 
-    return try await runInference(prompt: prompt, maxTokens: 200, temperature: 0.6)
+    return try await LlamaAnswerEngine.shared.complete(
+      chatML: prompt, maxTokens: 200, temperature: 0.6
+    )
   }
 
   // MARK: - Definition Generation
 
   func generateDefinition(word: String, bookTitle: String?, context: String? = nil) async throws -> WordDefinition {
-    guard let container = modelContainer else {
+    guard await isReady else {
       throw LLMError.modelNotLoaded
     }
 
@@ -213,7 +209,7 @@ actor OnDeviceLLMService {
   /// committing to an answer. Returns empty strings for fields it can't
   /// determine — callers must handle that.
   func extractCoverFields(ocrLines: [String]) async throws -> CoverFields {
-    guard modelContainer != nil else {
+    guard await isReady else {
       throw LLMError.modelNotLoaded
     }
 
@@ -368,7 +364,7 @@ actor OnDeviceLLMService {
   /// This is separate from generateDefinition() which returns a structured
   /// WordDefinition for display storage.
   func generateSpokenDefinition(word: String, sentenceContext: String) async throws -> String {
-    guard modelContainer != nil else {
+    guard await isReady else {
       throw LLMError.modelNotLoaded
     }
 
@@ -462,28 +458,14 @@ actor OnDeviceLLMService {
   // MARK: - Private
 
   private func runInference(prompt: String, maxTokens: Int, temperature: Float = 0.0) async throws -> String {
-    guard let container = modelContainer else {
-      throw LLMError.modelNotLoaded
-    }
-
-    var output = ""
-
-    _ = try await container.perform { context in
-      let input = UserInput(prompt: prompt)
-      let prepared = try await context.processor.prepare(input: input)
-
-      return try MLXLMCommon.generate(
-        input: prepared,
-        parameters: GenerateParameters(temperature: temperature),
-        context: context
-      ) { tokens in
-        let text = context.tokenizer.decode(tokens: tokens)
-        output = text
-        return tokens.count >= maxTokens ? .stop : .more
-      }
-    }
-
-    return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Plain prompts become a single user message — the same framing MLX's
+    // UserInput(prompt:) applied to them. /no_think because none of this utility
+    // work ever benefits from a reasoning chain, and some of it parses line
+    // prefixes that a stray chain would break.
+    let chatML = "<|im_start|>user\n\(prompt) /no_think<|im_end|>\n<|im_start|>assistant\n"
+    return try await LlamaAnswerEngine.shared.complete(
+      chatML: chatML, maxTokens: maxTokens, temperature: temperature
+    )
   }
 
   private func parseResponse(_ text: String) -> WordDefinition {

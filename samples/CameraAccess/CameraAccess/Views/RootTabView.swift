@@ -45,11 +45,10 @@ struct RootTabView: View {
       #endif
     }
     .tint(.ink)
-    // The MLX model is no longer pre-warmed at launch. Two reasons: the voice answer
-    // path now loads its own llama.cpp model at session start (where the wait is
-    // expected and visible), and warming a ~1GB model on every cold launch is a cost
-    // paid by every user for a feature most launches never touch. The remaining MLX
-    // call sites — quiz distractors and word enrichment — still load lazily on demand
-    // until they move over to the AnswerEngine and MLX is removed entirely.
+    // Nothing is pre-warmed at launch. The one model in the app — the llama.cpp
+    // Qwen3 shared by the voice session and the utility work (quizzes, enrichment,
+    // cover extraction) — loads at session start or first use, where the wait is
+    // expected and visible. Warming a ~1GB model on every cold launch is a cost paid
+    // by every user for a feature most launches never touch.
   }
 }

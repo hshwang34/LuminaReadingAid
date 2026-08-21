@@ -262,6 +262,13 @@ actor LlamaAnswerEngine: AnswerEngine {
     let started = Date()
     Log.llm.info("generation started — \"\(prompt.utterance, privacy: .public)\"")
 
+    // A raw completion (quiz distractors, enrichment) may have displaced the
+    // prewarmed prefix; restore it before this turn rather than during prepare().
+    if cachedPrefixTokens == 0 {
+      try prewarmSystemPrefix()
+      Log.llm.info("system prefix re-warmed after raw completion")
+    }
+
     // Keep the prewarmed system prefix; drop whatever the previous turn left.
     llama_memory_seq_rm(llama_get_memory(context), 0, cachedPrefixTokens, -1)
 
@@ -320,6 +327,80 @@ actor LlamaAnswerEngine: AnswerEngine {
     Log.llm.info("generation done — \(produced, privacy: .public) tokens in \(Int(seconds * 1000), privacy: .public) ms (\(String(format: "%.1f", Double(produced) / max(seconds, 0.001)), privacy: .public) tok/s)")
 
     continuation.yield(.final(answer.trimmingCharacters(in: .whitespacesAndNewlines)))
+  }
+
+  // MARK: - Raw completion
+
+  /// One-shot text completion for the app's utility work: quiz distractors, word
+  /// enrichment, cover-field extraction. This is what let the MLX runtime retire —
+  /// those features now share the voice session's model instead of holding a second
+  /// ~1 GB runtime resident alongside it.
+  ///
+  /// Uses its own system prompt, so it evicts the voice session's prewarmed KV
+  /// prefix; the next voice turn re-warms lazily (~half a second). Utility calls are
+  /// rare and mostly happen outside sessions, so that trade is taken here rather
+  /// than on the answer path.
+  /// - Parameter chatML: a fully assembled ChatML prompt ending in the assistant
+  ///   header. Callers own the framing because one of them (conversation chat)
+  ///   carries multi-turn history that a system/user pair cannot express.
+  func complete(
+    chatML: String,
+    maxTokens: Int,
+    temperature: Float = 0.0
+  ) async throws -> String {
+    guard case .ready = state, let context, let vocab else {
+      throw AnswerEngineError.modelUnavailable
+    }
+
+    generationID &+= 1
+    let myID = generationID
+    pendingBytes.removeAll(keepingCapacity: true)
+
+    // This prompt replaces everything, including the voice prefix.
+    llama_memory_seq_rm(llama_get_memory(context), 0, 0, -1)
+    cachedPrefixTokens = 0
+
+    let tokens = tokenize(chatML, addSpecial: true)
+    guard Int32(tokens.count + maxTokens) < Int32(contextTokens) else {
+      throw AnswerEngineError.generationFailed("prompt too long for context")
+    }
+    try decode(tokens)
+
+    let chainParams = llama_sampler_chain_default_params()
+    guard let chain = llama_sampler_chain_init(chainParams) else {
+      throw AnswerEngineError.generationFailed("sampler chain")
+    }
+    defer { llama_sampler_free(chain) }
+
+    if temperature <= 0 {
+      // Extraction and structured utility work wants determinism.
+      llama_sampler_chain_add(chain, llama_sampler_init_greedy())
+    } else {
+      llama_sampler_chain_add(chain, llama_sampler_init_top_k(AnswerSampling.topK))
+      llama_sampler_chain_add(chain, llama_sampler_init_top_p(AnswerSampling.topP, 1))
+      llama_sampler_chain_add(chain, llama_sampler_init_temp(temperature))
+      llama_sampler_chain_add(chain, llama_sampler_init_dist(UInt32.random(in: .min ... .max)))
+    }
+
+    var stripper = ThinkStripper()
+    var output = ""
+    var produced = 0
+
+    while produced < maxTokens {
+      guard myID == generationID else { throw AnswerEngineError.cancelled }
+      try Task.checkCancellation()
+
+      let token = llama_sampler_sample(chain, context, -1)
+      if llama_vocab_is_eog(vocab, token) { break }
+
+      output += stripper.consume(decodePiece(token))
+
+      try decode([token])
+      produced += 1
+      await Task.yield()
+    }
+
+    return output.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   // MARK: - Failure recovery
