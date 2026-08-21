@@ -11,6 +11,10 @@
 //
 // Reusable container component that provides consistent card styling throughout the app.
 //
+// Styled in the Pen & Paper language: linen surface, warm ink-tinted shadow. It
+// predates the design system (systemBackground + black shadow) and was the one
+// surface in the app that still looked like a stock iOS card among paper ones.
+//
 
 import SwiftUI
 
@@ -25,13 +29,7 @@ struct CardView<Content: View>: View {
     VStack(spacing: 0) {
       content
     }
-    .background(Color(.systemBackground))
-    .cornerRadius(12)
-    .shadow(
-      color: Color.black.opacity(0.1),
-      radius: 4,
-      x: 0,
-      y: 2
-    )
+    .background(.linen, in: RoundedRectangle(cornerRadius: CornerRadius.card))
+    .warmShadow(.subtle)
   }
 }

@@ -19,6 +19,13 @@ final class CapturedWord {
   // Context from the surrounding text (sentences above the word on the same page)
   var contextPhrase: String?
 
+  /// What the reader actually said when they asked about this word — "what does
+  /// divine mean in she divines her way". Raw material for personalised examples:
+  /// an example that echoes the reader's own phrasing lands better than a generic
+  /// one, and this is the only place that phrasing is ever heard. Optional, so the
+  /// SwiftData migration is automatic.
+  var spokenUtterance: String?
+
   // Word enrichment (populated via LLM lookup)
   var definition: String?
   var pronunciation: String?

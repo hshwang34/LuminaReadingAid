@@ -53,17 +53,23 @@ struct AnswerPrompt: Sendable, Equatable {
   /// `Dictionary: divine — (v) to guess by intuition; (adj) godlike`.
   /// Present only when the prefetch already has it — never worth waiting for.
   let dictionaryLine: String?
+  /// One optional line of personal context: what the reader said the last time they
+  /// asked about this word. An example that echoes their own phrasing lands better
+  /// than a generic one. A prompt line, not a subsystem — local fetch, no waiting.
+  let priorPhraseLine: String?
   let bookTitle: String?
 
   init(
     utterance: String,
     history: [ChatTurn] = [],
     dictionaryLine: String? = nil,
+    priorPhraseLine: String? = nil,
     bookTitle: String? = nil
   ) {
     self.utterance = utterance
     self.history = history
     self.dictionaryLine = dictionaryLine
+    self.priorPhraseLine = priorPhraseLine
     self.bookTitle = bookTitle
   }
 }

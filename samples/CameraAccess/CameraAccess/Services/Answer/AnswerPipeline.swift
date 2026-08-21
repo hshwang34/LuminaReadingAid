@@ -68,10 +68,12 @@ final class AnswerPipeline {
 
     let started = Date()
 
+    let word = IntentRouter.likelyTargetWord(in: utterance)
     let prompt = AnswerPrompt(
       utterance: utterance,
       history: context.priorTurns,
-      dictionaryLine: await cachedDictionaryLine(for: utterance),
+      dictionaryLine: await cachedDictionaryLine(for: word),
+      priorPhraseLine: priorPhraseLine(for: word, currentUtterance: utterance),
       bookTitle: context.bookTitle
     )
 
@@ -146,7 +148,8 @@ final class AnswerPipeline {
         gloss: nil,
         sense: senses.first,
         contextSentence: nil,
-        book: book
+        book: book,
+        spokenUtterance: utterance
       )
       Log.answer.info("captured \"\(outcome.word.text, privacy: .public)\" (\(outcome.isNew ? "new" : "enriched", privacy: .public))")
       return outcome.word
@@ -163,13 +166,23 @@ final class AnswerPipeline {
   /// Cache-only is the point: this line is a free upgrade when the prefetch already
   /// paid for it, and skipped otherwise. A network wait here would put the dictionary
   /// back on the latency path the redesign just took it off.
-  private func cachedDictionaryLine(for utterance: String) async -> String? {
-    guard let word = IntentRouter.likelyTargetWord(in: utterance) else { return nil }
+  private func cachedDictionaryLine(for word: String?) async -> String? {
+    guard let word else { return nil }
     guard let senses = await definitionCache.senses(for: word), !senses.isEmpty else {
       Log.answer.debug("no cached senses for \"\(word, privacy: .public)\" — answering ungrounded")
       return nil
     }
     Log.answer.info("grounded \"\(word, privacy: .public)\" from cache — \(senses.count, privacy: .public) senses")
     return PromptBuilder.dictionaryLine(word: word, senses: senses)
+  }
+
+  /// The one line of personal context: the reader has met this word before, and
+  /// this is what they said then. Local SwiftData fetch — microseconds, no network.
+  private func priorPhraseLine(for word: String?, currentUtterance: String) -> String? {
+    guard let word, let persistence,
+          let existing = try? persistence.fetch(word),
+          let prior = existing.spokenUtterance,
+          !prior.isEmpty, prior != currentUtterance else { return nil }
+    return "When they last asked about this word, they said: \"\(prior)\""
   }
 }

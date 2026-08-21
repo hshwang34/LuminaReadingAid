@@ -129,7 +129,15 @@ final class VoiceSessionController {
   // MARK: - Internal state
 
   private var context = SessionContext()
-  private var readingSession: ReadingSession?
+  private(set) var readingSession: ReadingSession?
+
+  /// A session that gathered words but was never bound to a book deserves one
+  /// question on the way out, not silent orphaning — the whole point of the library
+  /// is words filed under the book they came from.
+  var needsBookLink: Bool {
+    guard case .ended = phase else { return false }
+    return book == nil && !sessionWords.isEmpty && readingSession != nil
+  }
 
   private var transcriberObserver: UUID?
   private var pipelineObserver: UUID?
@@ -729,6 +737,19 @@ final class VoiceSessionController {
       end(.failed(error.localizedDescription))
     }
   }
+
+  // MARK: - Debug tuning
+
+  #if DEBUG
+  /// Live knobs for the two VAD numbers that need tuning against real rooms —
+  /// the pause a reader is allowed mid-sentence, and how far above room tone
+  /// speech must sit. On-device sliders beat rebuild-and-guess.
+  var vadTuning: VoiceAudioPipeline.Tuning {
+    get { pipeline.tuning }
+    set { pipeline.tuning = newValue }
+  }
+  var currentInputLevelDB: Float { pipeline.inputLevelDB }
+  #endif
 
   // MARK: - Timers
 

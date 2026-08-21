@@ -48,6 +48,9 @@ enum PromptBuilder {
     if let line = prompt.dictionaryLine {
       user += line + "\n"
     }
+    if let line = prompt.priorPhraseLine {
+      user += line + "\n"
+    }
     if let title = prompt.bookTitle, !title.isEmpty {
       user += "(Reading: \(title))\n"
     }

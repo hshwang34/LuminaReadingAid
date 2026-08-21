@@ -60,7 +60,8 @@ struct WordPersistenceService {
     gloss: String?,
     sense: DictionarySense?,
     contextSentence: String?,
-    book: Book?
+    book: Book?,
+    spokenUtterance: String? = nil
   ) throws -> Outcome {
 
     let normalized = WordNormalizer.normalize(word) ?? word.lowercased()
@@ -70,6 +71,11 @@ struct WordPersistenceService {
     let example = sense?.example
 
     if let existing = try fetch(normalized) {
+      // The most recent phrasing wins: the reader's relationship to a word moves,
+      // and the newest sentence is the one worth echoing back.
+      if let spokenUtterance, !spokenUtterance.isEmpty {
+        existing.spokenUtterance = spokenUtterance
+      }
       enrich(
         existing,
         definition: definition,
@@ -90,6 +96,7 @@ struct WordPersistenceService {
     created.definition = definition
     created.pronunciation = pronunciation
     created.exampleSentence = example
+    created.spokenUtterance = spokenUtterance
 
     context.insert(created)
     try context.save()

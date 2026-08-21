@@ -59,7 +59,7 @@ struct WordsTabView: View {
           Text("No words yet")
             .font(.sectionTitle)
             .foregroundStyle(.leather)
-          Text("Point at words while reading with your glasses to capture them.")
+          Text("Ask Luna about a word during a reading session and it will be saved here.")
             .font(.subheadline)
             .foregroundStyle(.leather.opacity(0.6))
             .multilineTextAlignment(.center)

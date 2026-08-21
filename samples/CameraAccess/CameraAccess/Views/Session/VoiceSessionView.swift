@@ -27,6 +27,7 @@ struct VoiceSessionView: View {
 
   @State private var controller: VoiceSessionController?
   @State private var elapsed: TimeInterval = 0
+  @State private var showBookLink = false
 
   private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -67,7 +68,21 @@ struct VoiceSessionView: View {
       elapsed = Date().timeIntervalSince(startedAt)
     }
     .onChange(of: controller?.phase) { _, phase in
-      if case .ended = phase { dismiss() }
+      guard case .ended = phase else { return }
+      // A bookless session that captured words gets one chance to file them
+      // before the screen goes away; everything else just closes.
+      if controller?.needsBookLink == true {
+        showBookLink = true
+      } else {
+        dismiss()
+      }
+    }
+    .sheet(isPresented: $showBookLink, onDismiss: { dismiss() }) {
+      if let session = controller?.readingSession {
+        OrphanSessionLinkView(session: session) {
+          showBookLink = false
+        }
+      }
     }
     .interactiveDismissDisabled()
   }
@@ -130,6 +145,31 @@ struct VoiceSessionView: View {
       }
       if !controller.lastQuestion.isEmpty {
         Text("heard: \(controller.lastQuestion)")
+      }
+
+      // VAD tuning, live. The two numbers that decide whether a hesitation ends
+      // the sentence and whether a page turn opens the recogniser.
+      HStack(spacing: Spacing.sm) {
+        Text("hold \(String(format: "%.1f", controller.vadTuning.releaseSeconds))s")
+          .frame(width: 64, alignment: .leading)
+        Slider(
+          value: Binding(
+            get: { controller.vadTuning.releaseSeconds },
+            set: { controller.vadTuning.releaseSeconds = $0 }
+          ),
+          in: 0.5...2.5, step: 0.1
+        )
+      }
+      HStack(spacing: Spacing.sm) {
+        Text("margin \(Int(controller.vadTuning.speechMarginDB))dB")
+          .frame(width: 64, alignment: .leading)
+        Slider(
+          value: Binding(
+            get: { Double(controller.vadTuning.speechMarginDB) },
+            set: { controller.vadTuning.speechMarginDB = Float($0) }
+          ),
+          in: 3...20, step: 1
+        )
       }
     }
     .font(.caption2.monospaced())
