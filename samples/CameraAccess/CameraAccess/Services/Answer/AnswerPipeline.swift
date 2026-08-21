@@ -9,10 +9,11 @@
 // utterance, they ride along as a single prompt line. The answer never waits on a
 // lookup.
 //
-// Word capture into the vocabulary book is deliberately absent here. It is a
-// separate concern from answering, and folding it into this path was how the
-// previous design accreted three layers of machinery. It returns later as its own
-// step, behind the answer, off the latency path.
+// Word capture is a separate step BEHIND the answer, never inside it. handle()
+// owns the latency path and touches nothing slow; captureWord() runs after the
+// answer is already sounding, where a dictionary network round trip costs the
+// reader nothing. Folding capture into the answer was how the previous design
+// accreted three layers of machinery — the separation is the lesson, kept.
 //
 
 import Foundation
@@ -41,17 +42,20 @@ final class AnswerPipeline {
   private let senseProvider: SenseProvider
   private let definitionCache: DefinitionCache
 
+  private let persistence: WordPersistenceService?
+
   init(
     engine: AnswerEngine = LlamaAnswerEngine.shared,
     tts: TTSEngine,
     senseProvider: SenseProvider = .shared,
     definitionCache: DefinitionCache = .shared,
-    modelContext: ModelContext? = nil  // kept for call-site stability; capture returns later
+    modelContext: ModelContext? = nil
   ) {
     self.engine = engine
     self.tts = tts
     self.senseProvider = senseProvider
     self.definitionCache = definitionCache
+    self.persistence = modelContext.map(WordPersistenceService.init)
   }
 
   // MARK: - Entry point
@@ -112,6 +116,44 @@ final class AnswerPipeline {
   /// are cached by the time the reader finishes their sentence.
   nonisolated func prefetch(_ word: String) {
     senseProvider.prefetch(word)
+  }
+
+  // MARK: - Word capture
+
+  /// Files the word a turn was about into the vocabulary book. Call AFTER the
+  /// answer — this is allowed to be slow (it may hit the dictionary network), which
+  /// is exactly why it is not part of `handle()`.
+  ///
+  /// The word comes from the reader's utterance, not from the model: it is almost
+  /// always verbatim there, and asking a model to repeat back something the app
+  /// already heard is how latency was lost last time. No word found means the turn
+  /// wasn't about a word — a follow-up, a chat — and nothing is filed, which is
+  /// correct: the vocabulary book is words the reader asked about, not a log.
+  func captureWord(from utterance: String, book: Book?) async -> CapturedWord? {
+    guard let persistence else { return nil }
+    guard let word = IntentRouter.likelyTargetWord(in: utterance) else { return nil }
+
+    let existing = try? persistence.fetch(word)
+    // Full sense lookup, network included — off the latency path by construction.
+    let senses = await senseProvider.senses(for: word, existingDefinition: existing?.definition)
+
+    do {
+      // gloss deliberately nil: the dictionary's definition reads better in a word
+      // list than a transcribed spoken answer does. The spoken answer's job was the
+      // moment; the dictionary's job is the record.
+      let outcome = try persistence.persist(
+        word: word,
+        gloss: nil,
+        sense: senses.first,
+        contextSentence: nil,
+        book: book
+      )
+      Log.answer.info("captured \"\(outcome.word.text, privacy: .public)\" (\(outcome.isNew ? "new" : "enriched", privacy: .public))")
+      return outcome.word
+    } catch {
+      Log.answer.error("word capture failed: \(error.localizedDescription, privacy: .public)")
+      return nil
+    }
   }
 
   // MARK: - Grounding

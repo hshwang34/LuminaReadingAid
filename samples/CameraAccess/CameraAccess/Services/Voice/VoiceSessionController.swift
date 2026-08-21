@@ -103,8 +103,9 @@ final class VoiceSessionController {
   /// The most recent spoken answer, verbatim — the model answers in prose now, so
   /// this string IS the answer, not a projection of structured fields.
   private(set) var lastAnswerText = ""
-  /// Words captured in this session. Empty for now: capture left the answer path in
-  /// the LM-native redesign and returns later as its own step behind the answer.
+  /// Words captured this session, in the order they were asked about. Fed by the
+  /// capture step that runs behind each answer; drives the chips and the Live
+  /// Activity count.
   private(set) var sessionWords: [String] = []
   private(set) var readiness: AnswerEngineReadiness = .notReady
   /// Non-fatal message worth putting in front of the reader.
@@ -543,7 +544,20 @@ final class VoiceSessionController {
           }
         )
         apply(result)
+
+        // Capture runs while Luna is still speaking — it may hit the dictionary
+        // network, and this is the one place in a turn where slow is free.
+        let captureTask = Task { [weak self] in
+          guard let self else { return }
+          if let captured = await answers.captureWord(from: utterance, book: book),
+             !sessionWords.contains(captured.text) {
+            sessionWords.append(captured.text)
+            updateLiveActivity()
+          }
+        }
+
         await tts.finishSpeaking()
+        await captureTask.value
       } catch is CancellationError {
         Log.session.info("turn cancelled mid-answer")
       } catch {

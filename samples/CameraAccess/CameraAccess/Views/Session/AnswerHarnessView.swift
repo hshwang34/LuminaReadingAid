@@ -287,6 +287,15 @@ struct AnswerHarnessView: View {
       let result = try await pipeline.handle(utterance: utterance, context: context)
       context = result.context
       transcript = lines(for: result)
+
+      // The capture step the session runs behind every answer, made visible here.
+      if let captured = await pipeline.captureWord(from: utterance, book: nil) {
+        transcript.append(Line(
+          label: "Saved word",
+          detail: "\(captured.text)\n\(captured.definition ?? "no definition")\n\(captured.pronunciation ?? "no phonetic")",
+          tone: .good
+        ))
+      }
     } catch {
       errorText = error.localizedDescription
     }
