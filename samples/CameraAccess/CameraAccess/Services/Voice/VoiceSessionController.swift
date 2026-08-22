@@ -117,6 +117,16 @@ final class VoiceSessionController {
   /// the answer card from prose into a dictionary entry.
   private(set) var lastCapturedWord: CapturedWord?
 
+  /// Kokoro download progress (0...1) while the gate is up; nil before it starts.
+  private(set) var voiceProgress: Double?
+  private(set) var isDownloadingModels = false
+
+  /// The gate: the one model a session cannot answer without. The voice model is
+  /// deliberately not part of this — the system voice covers until Kokoro is warm.
+  nonisolated var languageModelIsPresent: Bool {
+    LlamaModelStore.shared.isModelPresent
+  }
+
   var book: Book?
 
   // MARK: - Dependencies
@@ -297,6 +307,27 @@ final class VoiceSessionController {
   /// by tests; the spoken path funnels into the same method.
   func ask(_ utterance: String) {
     runTurn(utterance)
+  }
+
+  /// Drives the download gate: fetch the language model (blocking, with progress
+  /// via `readiness`) and the voice model (parallel, via `voiceProgress`).
+  /// Returns when the language model is ready — the session can start then.
+  func downloadModels() async {
+    guard !isDownloadingModels else { return }
+    isDownloadingModels = true
+    defer { isDownloadingModels = false }
+    Log.session.info("model download started from the gate")
+
+    if let kokoro = tts as? KokoroTTSEngine {
+      Task { [weak self] in
+        await kokoro.prepare { fraction in self?.voiceProgress = fraction }
+        self?.voiceProgress = 1.0
+      }
+    }
+
+    prepareModelIfNeeded()
+    await modelTask?.value
+    Log.session.info("model download finished — readiness \(String(describing: self.readiness), privacy: .public)")
   }
 
   /// Bind (or unbind) the session's book mid-flight — the Session tab's book

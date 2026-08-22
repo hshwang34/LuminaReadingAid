@@ -87,6 +87,9 @@ struct SessionTabView: View {
   private func autoStartIfNeeded() async {
     guard hasCompletedOnboarding, !showBookLink else { return }
     guard !controller.phase.isActive else { return }
+    // The gate: no language model, no session. The overlay below offers the
+    // download; the session starts the moment it lands.
+    guard controller.languageModelIsPresent else { return }
     await controller.start(book: nil)
   }
 
@@ -94,13 +97,158 @@ struct SessionTabView: View {
 
   @ViewBuilder
   private var content: some View {
-    switch controller.phase {
-    case .ended(.failed(let message)):
-      failedState(message)
-    case .ended:
-      summaryState
-    default:
-      liveState
+    if !controller.phase.isActive && !controller.languageModelIsPresent {
+      downloadGate
+    } else {
+      switch controller.phase {
+      case .ended(.failed(let message)):
+        failedState(message)
+      case .ended:
+        summaryState
+      default:
+        liveState
+      }
+    }
+  }
+
+  // MARK: - Model download gate
+
+  /// First run (or a deleted model): the session cannot answer without the
+  /// language model, so instead of silently starting a mic that leads nowhere,
+  /// the tab says exactly what is missing and shows the download as it happens.
+  private var downloadGate: some View {
+    VStack(spacing: Spacing.xl) {
+      Spacer()
+
+      Image(systemName: "arrow.down.circle")
+        .font(.system(size: 44))
+        .foregroundStyle(.amber)
+
+      VStack(spacing: Spacing.md) {
+        Text("Download Luna's models")
+          .font(.screenTitle)
+          .foregroundStyle(.ink)
+          .multilineTextAlignment(.center)
+        Text("A one-time download of about 1.1 GB — everything runs on your phone afterwards, nothing leaves it. Wi-Fi recommended.")
+          .font(.subheadline)
+          .foregroundStyle(.leather)
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .padding(.horizontal, Spacing.lg)
+
+      // Rows stay up after a failure so the error is readable next to the
+      // retry button, not vanished with the download flag.
+      if controller.isDownloadingModels || controller.readiness != .notReady {
+        VStack(spacing: Spacing.md) {
+          downloadRow(label: "Language model", state: languageModelRowState)
+          downloadRow(label: "Voice", state: voiceRowState)
+        }
+        .padding(Spacing.lg)
+        .hairlineCard()
+        .padding(.horizontal, Spacing.lg)
+      }
+
+      Spacer()
+
+      if !controller.isDownloadingModels {
+        Button {
+          Task {
+            await controller.downloadModels()
+            await autoStartIfNeeded()
+          }
+        } label: {
+          Text(controller.readiness.isFailure ? "Try Again" : "Download")
+            .font(.headline)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(Spacing.lg)
+            .background(.amber, in: RoundedRectangle(cornerRadius: CornerRadius.button))
+        }
+        .padding(.horizontal, Spacing.lg)
+      } else {
+        Text("Luna starts listening the moment the language model lands — the voice can finish in the background.")
+          .font(.caption)
+          .foregroundStyle(.leather.opacity(0.8))
+          .multilineTextAlignment(.center)
+          .padding(.horizontal, Spacing.xl)
+      }
+    }
+    .padding(.vertical, Spacing.lg)
+  }
+
+  private enum DownloadRowState {
+    case waiting
+    case fraction(Double)
+    case working(String)
+    case done
+    case failed(String)
+  }
+
+  private var languageModelRowState: DownloadRowState {
+    switch controller.readiness {
+    case .notReady: .waiting
+    case .downloading(let progress): .fraction(progress)
+    case .loading: .working("Loading\u{2026}")
+    case .ready: .done
+    case .failed(let message): .failed(message)
+    }
+  }
+
+  private var voiceRowState: DownloadRowState {
+    switch controller.voiceProgress {
+    case nil: .waiting
+    case .some(let fraction) where fraction >= 1: .done
+    case .some(let fraction): .fraction(fraction)
+    }
+  }
+
+  private func downloadRow(label: String, state: DownloadRowState) -> some View {
+    VStack(alignment: .leading, spacing: Spacing.xs) {
+      HStack {
+        Text(label)
+          .font(.subheadline.weight(.medium))
+          .foregroundStyle(.ink)
+        Spacer()
+        switch state {
+        case .waiting:
+          Text("Waiting")
+            .font(.caption)
+            .foregroundStyle(.leather)
+        case .fraction(let fraction):
+          Text("\(Int(fraction * 100))%")
+            .font(.stat(13))
+            .foregroundStyle(.amber)
+        case .working(let text):
+          Text(text)
+            .font(.caption)
+            .foregroundStyle(.leather)
+        case .done:
+          Image(systemName: "checkmark.circle.fill")
+            .font(.subheadline)
+            .foregroundStyle(.sage)
+        case .failed:
+          Image(systemName: "exclamationmark.triangle.fill")
+            .font(.subheadline)
+            .foregroundStyle(.brick)
+        }
+      }
+      switch state {
+      case .fraction(let fraction):
+        ProgressView(value: fraction)
+          .tint(.amber)
+      case .working:
+        ProgressView()
+          .controlSize(.small)
+          .tint(.amber)
+      case .failed(let message):
+        Text(message)
+          .font(.caption2)
+          .foregroundStyle(.brick)
+          .fixedSize(horizontal: false, vertical: true)
+      case .waiting, .done:
+        EmptyView()
+      }
     }
   }
 

@@ -108,6 +108,11 @@ enum AnswerEngineReadiness: Sendable, Equatable {
   case loading
   case ready
   case failed(String)
+
+  var isFailure: Bool {
+    if case .failed = self { return true }
+    return false
+  }
 }
 
 protocol AnswerEngine: Sendable {

@@ -54,16 +54,21 @@ final class KokoroTTSEngine: TTSEngine {
 
   // MARK: - Preparation
 
-  /// Download (first run, handled by the package) and warm the model.
-  /// Safe to call repeatedly; the session fires this at start and forgets it.
-  func prepare() async {
-    guard !isKokoroReady, !isPreparing else { return }
+  /// Download (first run) and warm the model. Safe to call repeatedly; the
+  /// session fires this at start and forgets it, and the download gate calls it
+  /// with a progress handler to drive its percentage row.
+  func prepare(onProgress: (@MainActor @Sendable (Double) -> Void)? = nil) async {
+    guard !isKokoroReady, !isPreparing else {
+      if isKokoroReady { onProgress?(1.0) }
+      return
+    }
     isPreparing = true
     defer { isPreparing = false }
 
     do {
-      try await synthesizer.prepare()
+      try await synthesizer.prepare(onProgress: onProgress)
       isKokoroReady = true
+      onProgress?(1.0)
       Log.tts.info("kokoro ready — clauses now use the neural voice")
     } catch {
       // Not an error state the reader should meet: the fallback voice keeps
@@ -235,18 +240,83 @@ actor KokoroSynthesizer {
 
   private var model: KokoroTTSModel?
 
-  func prepare() async throws {
+  /// Where the Kokoro files live: Application Support, beside the GGUF, for the
+  /// same reason — iOS purges Caches under disk pressure, and the package's
+  /// default cache is Caches. Excluded from iCloud backup (re-downloadable).
+  private static var cacheDir: URL {
+    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    return base.appendingPathComponent("Models/Kokoro", isDirectory: true)
+  }
+
+  func prepare(onProgress: (@MainActor @Sendable (Double) -> Void)? = nil) async throws {
     guard model == nil else { return }
+
+    let dir = Self.cacheDir
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    var dirURL = dir
+    try? dirURL.setResourceValues(values)
+    migrateLegacyCacheIfNeeded(into: dir)
+
+    // Offline-first: when the files are already on disk, skip the Hub entirely —
+    // without this the package re-contacts HuggingFace on every load, which is
+    // where the slow warm-ups were coming from. A stale or partial cache throws
+    // a cache miss, and we fall back to one online pass.
+    let cached = FileManager.default.fileExists(atPath: dir.appendingPathComponent("config.json").path)
+    do {
+      model = try await Self.load(cacheDir: dir, offline: cached, onProgress: onProgress)
+      if cached { Log.tts.info("kokoro loaded from local cache — no network") }
+    } catch where cached {
+      Log.tts.warning("kokoro offline cache incomplete — refreshing from the Hub")
+      model = try await Self.load(cacheDir: dir, offline: false, onProgress: onProgress)
+    }
+  }
+
+  private static func load(
+    cacheDir: URL, offline: Bool, onProgress: (@MainActor @Sendable (Double) -> Void)?
+  ) async throws -> KokoroTTSModel {
     let loaded = try await KokoroTTSModel.fromPretrained(
+      cacheDir: cacheDir,
+      offlineMode: offline,
       // `.all` would include the GPU, which iOS forbids from a backgrounded app.
       // CPU + ANE synthesises everywhere, including with the phone locked.
       computeUnits: .cpuAndNeuralEngine,
       progressHandler: { fraction, stage in
         Log.tts.info("kokoro download: \(Int(fraction * 100), privacy: .public)% — \(stage, privacy: .public)")
+        if let onProgress {
+          Task { @MainActor in onProgress(fraction) }
+        }
       }
     )
     try loaded.warmUp()
-    model = loaded
+    return loaded
+  }
+
+  /// Earlier builds let the package cache into Library/Caches. Move whatever is
+  /// there into the permanent home once, so testers don't pay for the download
+  /// again just because the cache moved.
+  private func migrateLegacyCacheIfNeeded(into dir: URL) {
+    let fm = FileManager.default
+    guard !fm.fileExists(atPath: dir.appendingPathComponent("config.json").path) else { return }
+    let cachesBase = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("qwen3-speech", isDirectory: true)
+    let modelId = "aufklarer/Kokoro-82M-CoreML"
+    let candidates = [
+      cachesBase.appendingPathComponent("models/\(modelId)", isDirectory: true),
+      cachesBase.appendingPathComponent(modelId.replacingOccurrences(of: "/", with: "_"), isDirectory: true),
+    ]
+    for candidate in candidates
+    where fm.fileExists(atPath: candidate.appendingPathComponent("config.json").path) {
+      do {
+        try? fm.removeItem(at: dir)
+        try fm.moveItem(at: candidate, to: dir)
+        Log.tts.info("kokoro cache migrated from Caches to Application Support")
+      } catch {
+        Log.tts.warning("kokoro cache migration failed (will re-download): \(error.localizedDescription, privacy: .public)")
+      }
+      return
+    }
   }
 
   func synthesize(text: String, speed: Float) throws -> [Float] {
