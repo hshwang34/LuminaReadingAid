@@ -81,14 +81,18 @@ final class AnswerPipeline {
     var firstAudio: Date?
     var finalText = ""
 
+    Log.answer.info("prompt built (+\(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms, dictionary: \(prompt.dictionaryLine != nil ? "yes" : "no", privacy: .public)) — handing to LLM")
+
     for try await event in engine.generate(prompt) {
       switch event {
       case .speakable(let clause):
         if firstAudio == nil {
           firstAudio = Date()
-          Log.answer.info("first audio at \(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms")
-          onFirstAudio?()
+          Log.answer.info("first audio — clause 1 → TTS at +\(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms")
+        } else {
+          Log.answer.info("clause \(spoken.count + 1, privacy: .public) → TTS (+\(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms)")
         }
+        if spoken.isEmpty { onFirstAudio?() }
         tts.enqueue(clause)
         spoken.append(clause)
 
@@ -96,6 +100,8 @@ final class AnswerPipeline {
         finalText = text
       }
     }
+
+    Log.answer.info("LLM stream ended (+\(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms) — \(spoken.count, privacy: .public) clauses handed to TTS")
 
     let answerText = finalText.isEmpty ? spoken.joined(separator: " ") : finalText
 

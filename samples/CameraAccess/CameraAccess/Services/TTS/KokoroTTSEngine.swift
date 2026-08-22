@@ -83,9 +83,11 @@ final class KokoroTTSEngine: TTSEngine {
     guard !text.isEmpty else { return }
 
     guard isKokoroReady else {
+      Log.tts.info("clause → system voice (kokoro not warm): \"\(text, privacy: .public)\"")
       fallback.enqueue(text)
       return
     }
+    Log.tts.info("clause queued for kokoro: \"\(text, privacy: .public)\"")
     workQueue.append((text, 1.0))
     drainQueue()
   }
@@ -139,8 +141,11 @@ final class KokoroTTSEngine: TTSEngine {
       guard let self else { return }
       while let job = nextJob(ifGeneration: myGeneration) {
         do {
+          let synthStarted = Date()
+          Log.tts.info("kokoro synthesis started: \"\(job.text, privacy: .public)\"")
           let samples = try await synthesizer.synthesize(text: job.text, speed: job.speed)
           guard myGeneration == generation else { break }
+          Log.tts.info("kokoro synthesis done in \(Int(Date().timeIntervalSince(synthStarted) * 1000), privacy: .public) ms — \(samples.count, privacy: .public) samples → playback")
           try schedule(samples)
         } catch {
           Log.tts.error("kokoro clause failed, falling back: \(error.localizedDescription, privacy: .public)")
@@ -171,12 +176,18 @@ final class KokoroTTSEngine: TTSEngine {
     let node = try existingOrNewPlayback()
     guard let buffer = node.makeBuffer(from: samples) else { return }
 
+    if pendingClauses == 0 {
+      Log.tts.info("playback started — audio at the speaker")
+    }
     pendingClauses += 1
     let myGeneration = generation
     node.play(buffer) { [weak self] in
       Task { @MainActor in
         guard let self, myGeneration == self.generation else { return }
         self.pendingClauses = max(0, self.pendingClauses - 1)
+        if self.pendingClauses == 0, self.workQueue.isEmpty, !self.isWorking {
+          Log.tts.info("playback finished — kokoro idle")
+        }
         self.settleIfIdle()
       }
     }

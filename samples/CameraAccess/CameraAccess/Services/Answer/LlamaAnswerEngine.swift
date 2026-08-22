@@ -304,6 +304,9 @@ actor LlamaAnswerEngine: AnswerEngine {
 
       let token = llama_sampler_sample(chain, context, -1)
       if llama_vocab_is_eog(vocab, token) { break }
+      if produced == 0 {
+        Log.llm.info("first token at +\(Int(Date().timeIntervalSince(started) * 1000), privacy: .public) ms")
+      }
 
       let piece = decodePiece(token)
       let speakableText = stripper.consume(piece)

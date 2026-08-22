@@ -348,7 +348,9 @@ final class VoiceAudioPipeline {
     inputLevelDB = level
     guard active != isVoiceActive else { return }
     isVoiceActive = active
-    Log.audio.info("\(active ? "voice began" : "voice ended", privacy: .public) (\(Int(level), privacy: .public) dB)")
+    // Debug-level and dB-free on purpose: these fire on every burst and were
+    // drowning the interesting boundaries (LLM start, TTS start) in the log.
+    Log.audio.debug("\(active ? "voice began" : "voice ended", privacy: .public)")
     observers.send(active ? .voiceBegan : .voiceEnded)
   }
 

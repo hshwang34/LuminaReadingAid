@@ -68,7 +68,7 @@ final class AVSpeechTTSEngine: NSObject, TTSEngine {
     let text = clause.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return }
 
-    Log.tts.info("enqueue: \"\(text, privacy: .public)\"")
+    Log.tts.info("system voice speaking: \"\(text, privacy: .public)\"")
     let utterance = makeUtterance(text, rate: rate)
     pending.insert(utterance)
     synthesizer.speak(utterance)
