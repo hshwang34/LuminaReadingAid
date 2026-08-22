@@ -46,7 +46,7 @@ struct MainAppView: View {
       sessionController = VoiceSessionController(modelContext: modelContext)
     }
     .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
-      OnboardingCoordinatorView(wearablesViewModel: viewModel) {
+      OnboardingCoordinatorView {
         hasCompletedOnboarding = true
       }
       .interactiveDismissDisabled(true)

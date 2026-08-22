@@ -24,7 +24,7 @@ struct OnboardingWelcomeView: View {
           .foregroundColor(.ink)
           .multilineTextAlignment(.center)
 
-        Text("Lumina watches you read and saves the words you reach for — no typing required.")
+        Text("Read your book, ask Luna out loud, and every word you reach for is kept — defined, filed, and quizzed later. No typing, no glasses, nothing leaves your phone.")
           .font(.system(size: 17))
           .foregroundColor(.leather)
           .multilineTextAlignment(.center)
