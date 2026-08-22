@@ -67,7 +67,11 @@ final class VoiceAudioPipeline {
     /// half a thought was sent off to be answered. 1.2s survives a natural gather-
     /// your-words pause; the latency cost is real but is paid once, after the reader
     /// has finished talking.
-    var releaseSeconds: TimeInterval = 1.2
+    // 0.9s: short enough that the answer starts promptly after a real full stop.
+    // Mid-sentence hesitations longer than this end the burst, but the session
+    // holds incomplete fragments and the transcriber carries them into the next
+    // burst — a pause splits the audio, never the sentence.
+    var releaseSeconds: TimeInterval = 0.9
     /// Audio retained ahead of a burst, replayed into the recogniser when it opens.
     var prerollSeconds: TimeInterval = 1.5
   }

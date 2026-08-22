@@ -61,6 +61,15 @@ final class UtteranceTranscriber {
   /// Text from earlier tasks in this same burst, carried across a rotation so the
   /// burst still reads as one utterance.
   private var carryOver = ""
+  /// The raw text of the most recently emitted burst — what `retainLastBurst()`
+  /// promotes into the next burst's seed.
+  private var lastBurstText = ""
+  /// Seed for the next burst. Set when the session judged the last burst to be
+  /// half a sentence: a reader's mid-thought pause ends the burst (the energy
+  /// detector can't know a hesitation from a full stop), and without this the
+  /// next burst opens a fresh recogniser that has never heard the first half.
+  /// "What does… [pause] …the table mean" must arrive as one question.
+  private var pendingCarry = ""
   private var burstStartedAt = Date.distantPast
 
   /// Apple's ceiling is about 60s. Rotate before it so the cut is ours, not an error.
@@ -125,7 +134,25 @@ final class UtteranceTranscriber {
     isPaused = false
     currentTranscript = ""
     carryOver = ""
+    clearRetainedBurst()
     pipeline.setDetectionEnabled(true)
+  }
+
+  /// Keep the last emitted burst and prepend it to the next one.
+  ///
+  /// Called by the session when a burst ended on half a thought — the hold is the
+  /// session's decision (it knows what an answerable question looks like); making
+  /// the text survive into the next burst is this class's.
+  func retainLastBurst() {
+    guard !lastBurstText.isEmpty else { return }
+    Log.stt.info("retaining burst across pause: \"\(self.lastBurstText, privacy: .public)\"")
+    pendingCarry = lastBurstText
+  }
+
+  /// Drop any held fragment — the question window expired without a continuation.
+  func clearRetainedBurst() {
+    pendingCarry = ""
+    lastBurstText = ""
   }
 
   // MARK: - Pipeline events
@@ -149,8 +176,11 @@ final class UtteranceTranscriber {
   private func beginBurst() {
     guard task == nil else { return }
     Log.stt.info("burst began — opening recognition task")
-    carryOver = ""
-    currentTranscript = ""
+    // A held fragment from the previous burst seeds this one, so a hesitation
+    // splits the audio but never the sentence.
+    carryOver = pendingCarry
+    pendingCarry = ""
+    currentTranscript = carryOver
     burstStartedAt = Date()
     openTask(replayingPreroll: true)
   }
@@ -159,10 +189,14 @@ final class UtteranceTranscriber {
     guard task != nil || emit else { return }
     closeTask()
 
-    let text = currentTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+    // A burst that produced no recognition results still carries its seed: the
+    // held fragment stands even when the new sound turned out not to be words.
+    let text = (currentTranscript.isEmpty ? carryOver : currentTranscript)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     currentTranscript = ""
     carryOver = ""
     if emit {
+      lastBurstText = text
       Log.stt.info("burst ended — final: \"\(text, privacy: .public)\"")
       observers.send(.burstEnded(text))
     } else {

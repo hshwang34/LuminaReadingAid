@@ -479,9 +479,11 @@ final class VoiceSessionController {
         liveTranscript = ""
         armWindow(questionWindow)
       } else if !isCompleteEnoughToAnswer(question) {
-        // Half a thought — the burst ended inside their hesitation. Keep listening;
-        // the rest of the sentence is coming.
+        // Half a thought — the burst ended inside their hesitation. Keep listening,
+        // and carry the words already heard into the next burst so the sentence
+        // arrives whole.
         Log.session.info("holding — fragment not answerable yet: \"\(question, privacy: .public)\"")
+        transcriber.retainLastBurst()
         phase = .awaitingQuestion
         armWindow(questionWindow)
       } else {
@@ -493,6 +495,7 @@ final class VoiceSessionController {
       guard !question.isEmpty else { return }
       guard isCompleteEnoughToAnswer(question) else {
         Log.session.info("holding — fragment not answerable yet: \"\(question, privacy: .public)\"")
+        transcriber.retainLastBurst()
         armWindow(questionWindow)
         return
       }
@@ -504,7 +507,8 @@ final class VoiceSessionController {
       // A short fragment during the follow-up window is usually room noise that the
       // recogniser turned into a word, not a question.
       guard question.split(separator: " ").count >= 2 else {
-        Log.session.debug("follow-up fragment ignored: \"\(question, privacy: .public)\"")
+        Log.session.debug("follow-up fragment held: \"\(question, privacy: .public)\"")
+        transcriber.retainLastBurst()
         return
       }
       cancelWindow()
@@ -830,6 +834,7 @@ final class VoiceSessionController {
         return
       }
       liveTranscript = ""
+      transcriber.clearRetainedBurst()
       phase = .listeningIdle
     }
   }
