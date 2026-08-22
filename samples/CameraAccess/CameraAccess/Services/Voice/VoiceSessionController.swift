@@ -161,6 +161,13 @@ final class VoiceSessionController {
 
   private var silenceTimer: Task<Void, Never>?
   private var windowTimer: Task<Void, Never>?
+  /// When the recogniser last produced a partial. The energy detector can latch
+  /// on steady noise (a fan, music) and never report voice-ended; the recogniser
+  /// going quiet is the more trustworthy sign that the reader stopped talking.
+  private var lastPartialAt = Date.distantPast
+  /// How long the recogniser must be silent before the window expiry stops
+  /// deferring to the energy detector.
+  private let staleTranscriptGrace: TimeInterval = 2.0
 
   private let liveActivity = VoiceSessionActivityManager()
 
@@ -467,6 +474,7 @@ final class VoiceSessionController {
   }
 
   private func handlePartial(_ text: String) {
+    lastPartialAt = Date()
     switch phase {
     case .capturingUtterance:
       // Re-derive rather than remember an offset: partials get rewritten in place.
@@ -536,6 +544,7 @@ final class VoiceSessionController {
 
     case .coolingDown:
       let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !question.isEmpty else { return }
       // A short fragment during the follow-up window is usually room noise that the
       // recogniser turned into a word, not a question.
       guard question.split(separator: " ").count >= 2 else {
@@ -857,14 +866,28 @@ final class VoiceSessionController {
       case .coolingDown, .awaitingQuestion, .capturingUtterance: break
       default: return
       }
-      // Same rule, enforced at the point of expiry: partials re-arm this timer, but a
-      // partial can lag the sound itself, so the energy detector is the authority. If
-      // someone is audibly talking, give them the window again rather than closing it
-      // over their sentence.
-      if pipeline.isVoiceActive {
+      // Partials re-arm this timer, and a partial can lag the sound, so an
+      // audibly-talking reader gets the window back. But the energy detector can
+      // also latch on steady noise and never report voice-ended — before this
+      // check, that stranded the session in capturingUtterance forever with a
+      // finished question on screen. If the recogniser has been quiet for the
+      // grace period, the words are the authority, not the energy.
+      if pipeline.isVoiceActive, Date().timeIntervalSince(lastPartialAt) < staleTranscriptGrace {
         armWindow(seconds)
         return
       }
+
+      if pipeline.isVoiceActive {
+        let candidate = strippingWakeEcho(
+          liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines))
+        if !candidate.isEmpty {
+          Log.session.warning("finalizing stalled burst — energy active but recogniser quiet: \"\(candidate, privacy: .public)\"")
+          runTurn(candidate)
+          return
+        }
+        Log.session.info("window expired on stuck energy with no words — treating as noise")
+      }
+
       liveTranscript = ""
       transcriber.clearRetainedBurst()
       phase = .listeningIdle
