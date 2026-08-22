@@ -82,7 +82,15 @@ struct FormalDefinitionCard: View {
           .foregroundStyle(.leather)
       }
 
-      if let gloss = word.definition, !gloss.isEmpty {
+      if let pos = word.displayPartOfSpeech {
+        Text(pos.uppercased())
+          .font(.caption2.weight(.semibold))
+          .tracking(1.2)
+          .foregroundStyle(.amber)
+          .padding(.top, Spacing.xs)
+      }
+
+      if let gloss = word.bareDefinition, !gloss.isEmpty {
         Text(gloss)
           .font(.body)
           .foregroundStyle(.ink)

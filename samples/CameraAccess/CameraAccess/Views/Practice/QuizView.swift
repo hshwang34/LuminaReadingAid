@@ -72,10 +72,16 @@ struct QuizView: View {
         .foregroundStyle(.leather)
 
       // Card
-      VStack {
+      VStack(spacing: Spacing.xs) {
+        if question.style == .wordToDefinition, let pos = question.word.displayPartOfSpeech {
+          Text(pos.uppercased())
+            .font(.caption2.weight(.semibold))
+            .tracking(1.2)
+            .foregroundStyle(.amber)
+        }
         Text(question.style == .wordToDefinition
              ? question.word.text
-             : question.word.definition ?? "")
+             : question.word.bareDefinition ?? "")
           .font(question.style == .wordToDefinition ? .headword : .system(.title3))
           .foregroundStyle(.ink)
           .multilineTextAlignment(.center)
@@ -110,6 +116,19 @@ struct QuizView: View {
               Text(book.title)
                 .font(.caption)
                 .foregroundStyle(.leather.opacity(0.6))
+            }
+            // Immediate payoff: where this answer moves the word. Preview of the
+            // same update nextQuestion() commits.
+            if let word = viewModel.currentQuestion?.word,
+               viewModel.selectedAnswer == viewModel.currentQuestion?.correctIndex {
+              let next = SpacedRepetitionService.updateMastery(
+                currentLevel: word.masteryLevel, wasCorrect: true
+              ).newLevel
+              if next > word.masteryLevel {
+                Text("Mastery: Level \(word.masteryLevel) \u{2192} \(next)")
+                  .font(.caption.weight(.semibold))
+                  .foregroundStyle(.amber)
+              }
             }
           }
           .padding(.top, Spacing.sm)

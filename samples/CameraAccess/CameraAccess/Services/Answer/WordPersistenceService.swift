@@ -69,6 +69,7 @@ struct WordPersistenceService {
     let definition = Self.formattedDefinition(gloss: gloss, sense: sense)
     let pronunciation = sense?.phonetic
     let example = sense?.example
+    let partOfSpeech = sense?.partOfSpeech.trimmingCharacters(in: .whitespaces)
 
     if let existing = try fetch(normalized) {
       // The most recent phrasing wins: the reader's relationship to a word moves,
@@ -80,6 +81,7 @@ struct WordPersistenceService {
         existing,
         definition: definition,
         pronunciation: pronunciation,
+        partOfSpeech: partOfSpeech,
         example: example,
         contextSentence: contextSentence,
         book: book
@@ -95,6 +97,7 @@ struct WordPersistenceService {
     )
     created.definition = definition
     created.pronunciation = pronunciation
+    created.partOfSpeech = partOfSpeech?.isEmpty == false ? partOfSpeech : nil
     created.exampleSentence = example
     created.spokenUtterance = spokenUtterance
 
@@ -120,6 +123,7 @@ struct WordPersistenceService {
     _ word: CapturedWord,
     definition: String?,
     pronunciation: String?,
+    partOfSpeech: String?,
     example: String?,
     contextSentence: String?,
     book: Book?
@@ -129,6 +133,9 @@ struct WordPersistenceService {
     }
     if isBlank(word.pronunciation), let pronunciation, !pronunciation.isEmpty {
       word.pronunciation = pronunciation
+    }
+    if isBlank(word.partOfSpeech), let partOfSpeech, !partOfSpeech.isEmpty {
+      word.partOfSpeech = partOfSpeech
     }
     if isBlank(word.exampleSentence), let example, !example.isEmpty {
       word.exampleSentence = example

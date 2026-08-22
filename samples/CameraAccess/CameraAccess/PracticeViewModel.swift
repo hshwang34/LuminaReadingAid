@@ -26,6 +26,8 @@ class PracticeViewModel: ObservableObject {
   @Published var currentIndex: Int = 0
   @Published var selectedAnswer: Int?
   @Published var score: Int = 0
+  /// Words whose mastery level rose this quiz — the results screen's payoff line.
+  @Published private(set) var leveledUpCount = 0
   @Published var isFinished: Bool = false
   @Published var isGeneratingQuiz: Bool = false
 
@@ -81,6 +83,7 @@ class PracticeViewModel: ObservableObject {
     questions = []
     currentIndex = 0
     score = 0
+    leveledUpCount = 0
     selectedAnswer = nil
     isFinished = false
     isGeneratingQuiz = true
@@ -128,6 +131,9 @@ class PracticeViewModel: ObservableObject {
       currentLevel: question.word.masteryLevel,
       wasCorrect: wasCorrect
     )
+    if result.newLevel > question.word.masteryLevel {
+      leveledUpCount += 1
+    }
     question.word.masteryLevel = result.newLevel
     question.word.nextReviewDate = result.nextReview
     try? modelContext.save()

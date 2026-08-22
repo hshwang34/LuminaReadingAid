@@ -38,6 +38,10 @@ struct PracticeTabView: View {
           Text("\(dueForReview) due for review")
             .font(.subheadline)
             .foregroundStyle(.leather)
+
+          // Six bars, L0-L5 — the same mastery language as Profile's histogram,
+          // teasing the system from the hub itself.
+          masterySparkline
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.xl)
@@ -107,6 +111,20 @@ struct PracticeTabView: View {
         QuizView(viewModel: quizVM, quizType: type)
       }
     }
+  }
+
+  private var masterySparkline: some View {
+    let buckets = (0...5).map { level in words.filter { $0.masteryLevel == level }.count }
+    let maxBucket = max(buckets.max() ?? 0, 1)
+    return HStack(alignment: .bottom, spacing: Spacing.xs) {
+      ForEach(0..<buckets.count, id: \.self) { level in
+        RoundedRectangle(cornerRadius: 2)
+          .fill(level == 5 ? .sage : .amber.opacity(0.35 + 0.13 * Double(level)))
+          .frame(width: 14, height: max(4, 28 * CGFloat(buckets[level]) / CGFloat(maxBucket)))
+      }
+    }
+    .padding(.top, Spacing.xs)
+    .accessibilityLabel("Mastery distribution")
   }
 
   private func startQuiz(_ type: QuizType) {

@@ -30,6 +30,9 @@ final class CapturedWord {
   var definition: String?
   var pronunciation: String?
   var exampleSentence: String?
+  /// Grammatical category from the dictionary sense that grounded the answer
+  /// ("verb", "adjective"). Optional, so the SwiftData migration is automatic.
+  var partOfSpeech: String?
 
   // Learning & practice
   var isStarred: Bool = false
@@ -59,4 +62,28 @@ enum AppContainer {
   static let shared: ModelContainer = {
     try! ModelContainer(for: Book.self, ReadingSession.self, CapturedWord.self, CapturedPassage.self, QuizResult.self)
   }()
+}
+
+extension CapturedWord {
+  /// The stored definition with any leading "(pos)" tag removed — for UIs that
+  /// render the part of speech as its own label.
+  var bareDefinition: String? {
+    guard let definition else { return nil }
+    guard definition.hasPrefix("("), let close = definition.firstIndex(of: ")") else {
+      return definition
+    }
+    return String(definition[definition.index(after: close)...])
+      .trimmingCharacters(in: .whitespaces)
+  }
+
+  /// Part of speech from the field, falling back to the "(pos)" prefix older
+  /// captures embedded in the definition string.
+  var displayPartOfSpeech: String? {
+    if let partOfSpeech, !partOfSpeech.isEmpty { return partOfSpeech }
+    guard let definition, definition.hasPrefix("("),
+          let close = definition.firstIndex(of: ")") else { return nil }
+    let pos = String(definition[definition.index(after: definition.startIndex)..<close])
+      .trimmingCharacters(in: .whitespaces)
+    return pos.isEmpty ? nil : pos
+  }
 }

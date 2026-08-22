@@ -35,8 +35,14 @@ struct WordDetailView: View {
           }
         }
 
-        // Mastery, at a glance.
+        // Part of speech + mastery, at a glance.
         HStack(spacing: Spacing.sm) {
+          if let pos = word.displayPartOfSpeech {
+            Text(pos.uppercased())
+              .font(.caption2.weight(.semibold))
+              .tracking(1.2)
+              .foregroundStyle(.amber)
+          }
           MasteryBar(level: word.masteryLevel)
           Text(masteryLabel)
             .font(.caption)
@@ -44,7 +50,7 @@ struct WordDetailView: View {
         }
 
         // The one gloss. No eyebrow label — it is the only thing here.
-        if let definition = word.definition {
+        if let definition = word.bareDefinition {
           Text(definition)
             .font(.title3)
             .foregroundStyle(.ink)

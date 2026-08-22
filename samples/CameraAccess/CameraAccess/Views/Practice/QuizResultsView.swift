@@ -49,6 +49,12 @@ struct QuizResultsView: View {
         .multilineTextAlignment(.center)
         .padding(.horizontal, Spacing.xxl)
 
+      if viewModel.leveledUpCount > 0 {
+        Text("\(viewModel.leveledUpCount) word\(viewModel.leveledUpCount == 1 ? "" : "s") leveled up")
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.amber)
+      }
+
       Spacer()
 
       Button {
