@@ -243,9 +243,30 @@ actor KokoroSynthesizer {
   /// Where the Kokoro files live: Application Support, beside the GGUF, for the
   /// same reason — iOS purges Caches under disk pressure, and the package's
   /// default cache is Caches. Excluded from iCloud backup (re-downloadable).
-  private static var cacheDir: URL {
+  static var cacheDir: URL {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     return base.appendingPathComponent("Models/Kokoro", isDirectory: true)
+  }
+
+  /// Whether the voice model is on disk — in the permanent home, or in the
+  /// legacy Caches spot a previous build downloaded to (prepare() migrates that
+  /// copy on first load, so for gating purposes it counts as present).
+  nonisolated static var isModelCached: Bool {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: cacheDir.appendingPathComponent("config.json").path) { return true }
+    return legacyCacheCandidates.contains {
+      fm.fileExists(atPath: $0.appendingPathComponent("config.json").path)
+    }
+  }
+
+  nonisolated static var legacyCacheCandidates: [URL] {
+    let cachesBase = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("qwen3-speech", isDirectory: true)
+    let modelId = "aufklarer/Kokoro-82M-CoreML"
+    return [
+      cachesBase.appendingPathComponent("models/\(modelId)", isDirectory: true),
+      cachesBase.appendingPathComponent(modelId.replacingOccurrences(of: "/", with: "_"), isDirectory: true),
+    ]
   }
 
   func prepare(onProgress: (@MainActor @Sendable (Double) -> Void)? = nil) async throws {
@@ -299,14 +320,7 @@ actor KokoroSynthesizer {
   private func migrateLegacyCacheIfNeeded(into dir: URL) {
     let fm = FileManager.default
     guard !fm.fileExists(atPath: dir.appendingPathComponent("config.json").path) else { return }
-    let cachesBase = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("qwen3-speech", isDirectory: true)
-    let modelId = "aufklarer/Kokoro-82M-CoreML"
-    let candidates = [
-      cachesBase.appendingPathComponent("models/\(modelId)", isDirectory: true),
-      cachesBase.appendingPathComponent(modelId.replacingOccurrences(of: "/", with: "_"), isDirectory: true),
-    ]
-    for candidate in candidates
+    for candidate in Self.legacyCacheCandidates
     where fm.fileExists(atPath: candidate.appendingPathComponent("config.json").path) {
       do {
         try? fm.removeItem(at: dir)

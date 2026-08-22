@@ -121,10 +121,11 @@ final class VoiceSessionController {
   private(set) var voiceProgress: Double?
   private(set) var isDownloadingModels = false
 
-  /// The gate: the one model a session cannot answer without. The voice model is
-  /// deliberately not part of this — the system voice covers until Kokoro is warm.
-  nonisolated var languageModelIsPresent: Bool {
-    LlamaModelStore.shared.isModelPresent
+  /// The gate: a session doesn't start until everything Luna needs is on disk —
+  /// the language model AND the voice. (User decision: no half-ready sessions;
+  /// the gate shows both downloads instead.)
+  nonisolated var modelsArePresent: Bool {
+    LlamaModelStore.shared.isModelPresent && KokoroSynthesizer.isModelCached
   }
 
   var book: Book?
@@ -309,25 +310,25 @@ final class VoiceSessionController {
     runTurn(utterance)
   }
 
-  /// Drives the download gate: fetch the language model (blocking, with progress
-  /// via `readiness`) and the voice model (parallel, via `voiceProgress`).
-  /// Returns when the language model is ready — the session can start then.
+  /// Drives the download gate: the language model (progress via `readiness`) and
+  /// the voice model (progress via `voiceProgress`) in parallel. Returns when
+  /// BOTH are done — the session starts then, fully equipped.
   func downloadModels() async {
     guard !isDownloadingModels else { return }
     isDownloadingModels = true
     defer { isDownloadingModels = false }
     Log.session.info("model download started from the gate")
 
-    if let kokoro = tts as? KokoroTTSEngine {
-      Task { [weak self] in
-        await kokoro.prepare { fraction in self?.voiceProgress = fraction }
-        self?.voiceProgress = 1.0
-      }
+    let voiceTask = Task { [weak self] in
+      guard let kokoro = self?.tts as? KokoroTTSEngine else { return }
+      await kokoro.prepare { fraction in self?.voiceProgress = fraction }
+      if KokoroSynthesizer.isModelCached { self?.voiceProgress = 1.0 }
     }
 
     prepareModelIfNeeded()
     await modelTask?.value
-    Log.session.info("model download finished — readiness \(String(describing: self.readiness), privacy: .public)")
+    await voiceTask.value
+    Log.session.info("model download finished — readiness \(String(describing: self.readiness), privacy: .public), voice cached: \(KokoroSynthesizer.isModelCached, privacy: .public)")
   }
 
   /// Bind (or unbind) the session's book mid-flight — the Session tab's book

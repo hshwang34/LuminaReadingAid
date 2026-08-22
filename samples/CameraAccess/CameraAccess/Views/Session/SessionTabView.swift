@@ -87,9 +87,9 @@ struct SessionTabView: View {
   private func autoStartIfNeeded() async {
     guard hasCompletedOnboarding, !showBookLink else { return }
     guard !controller.phase.isActive else { return }
-    // The gate: no language model, no session. The overlay below offers the
-    // download; the session starts the moment it lands.
-    guard controller.languageModelIsPresent else { return }
+    // The gate: both models on disk, or no session. The overlay below offers
+    // the download; the session starts the moment everything lands.
+    guard controller.modelsArePresent else { return }
     await controller.start(book: nil)
   }
 
@@ -97,7 +97,7 @@ struct SessionTabView: View {
 
   @ViewBuilder
   private var content: some View {
-    if !controller.phase.isActive && !controller.languageModelIsPresent {
+    if !controller.phase.isActive && !controller.modelsArePresent {
       downloadGate
     } else {
       switch controller.phase {
@@ -129,7 +129,7 @@ struct SessionTabView: View {
           .font(.screenTitle)
           .foregroundStyle(.ink)
           .multilineTextAlignment(.center)
-        Text("A one-time download of about 1.1 GB — everything runs on your phone afterwards, nothing leaves it. Wi-Fi recommended.")
+        Text("A one-time download of about 1.3 GB (language model + voice) — everything runs on your phone afterwards, nothing leaves it. Wi-Fi recommended.")
           .font(.subheadline)
           .foregroundStyle(.leather)
           .multilineTextAlignment(.center)
@@ -167,7 +167,7 @@ struct SessionTabView: View {
         }
         .padding(.horizontal, Spacing.lg)
       } else {
-        Text("Luna starts listening the moment the language model lands — the voice can finish in the background.")
+        Text("Luna starts listening as soon as both are ready.")
           .font(.caption)
           .foregroundStyle(.leather.opacity(0.8))
           .multilineTextAlignment(.center)
